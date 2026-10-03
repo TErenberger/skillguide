@@ -70,25 +70,25 @@ Add these lines to `SkillGuideForever.toc`:
 | `WAGO_API_TOKEN` | Wago API token |
 | `WOWI_API_TOKEN` | WoWInterface API token |
 
-## 6. First release
+Also enable **Settings → Actions → General → Workflow permissions → Read and write**.
+
+## 6. First / ongoing release
+
+Preferred (packages + uploads via Actions):
 
 ```powershell
-.\package.ps1 -Version 0.1.0
+.\release.ps1 -UpdateData -Bump patch -Push
 ```
 
-Upload `dist\SkillGuideForever-0.1.0.zip` as **Beta**, then later:
+Or from GitHub: **Actions → Release → Run workflow**:
+- `bump-and-publish` — bump, tag, push (packaging follows on the tag)
+- `publish-tag` — rebuild/upload an existing tag like `v0.3.0`
+
+Manual zip only:
 
 ```powershell
-git tag v0.1.0
-git push origin v0.1.0
+.\package.ps1 -Version 0.3.0
+.\upload-curseforge.ps1 -Version 0.3.0
 ```
 
-## 7. Ongoing updates
-
-```powershell
-.\update-data.ps1 -Deploy
-# bump ## Version in SkillGuideForever.toc + CHANGELOG.md
-git commit -am "Update Forever skill seed"
-git tag v0.1.1
-git push origin master v0.1.1
-```
+See [RELEASE.md](RELEASE.md) for Wago/CurseForge/WoWI wiring details.

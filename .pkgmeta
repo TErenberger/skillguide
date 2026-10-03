@@ -4,10 +4,12 @@ package-as: SkillGuideForever
 ignore:
   - tools
   - media
+  - dist
   - update-data.ps1
   - update-data.bat
   - package.ps1
   - release.ps1
+  - upload-curseforge.ps1
   - PUBLISHING.md
   - RELEASE.md
   - .github
