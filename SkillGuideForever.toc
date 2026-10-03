@@ -10,6 +10,7 @@
 ## X-License: MIT
 ## X-Source: https://github.com/TErenberger/skillguide
 ## X-Curse-Project-ID: 1723468
+## X-Wago-ID: aN0aEa6j
 
 Core\Data.lua
 Core\ProfessionData.lua
