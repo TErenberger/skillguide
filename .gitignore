@@ -1,0 +1,9 @@
+tools/_cache/
+tools/__pycache__/
+_tmp*/
+*.pyc
+dist/
+.release/
+*.zip
+.DS_Store
+Thumbs.db

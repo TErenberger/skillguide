@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: SkillGuide
+## Notes: Browse Forever class skills and ranks with the level required to train them.
+## Author: Trey
+## Version: 0.1.0
+## IconTexture: Interface\Icons\INV_Misc_Book_09
+## Category: Class
+## SavedVariables: SkillGuideDB
+## X-Website: https://github.com/TErenberger/skillguide
+## X-License: MIT
+
+Core\Data.lua
+Core\Class.lua
+UI\MainFrame.lua
+SkillGuide.lua
