@@ -1,21 +1,141 @@
 name: Release
 
+# Publishes SkillGuide Forever when a version tag v* is pushed.
+# Manual "bump-and-publish" only bumps/tags/pushes; the tag push then packages once.
+# Manual "publish-tag" rebuilds/uploads an existing tag (re-run / repair).
+#
+# Uploads (when configured):
+#   - GitHub Release  (GITHUB_TOKEN)
+#   - CurseForge      (CF_API_KEY + ## X-Curse-Project-ID)
+#   - Wago Addons     (WAGO_API_TOKEN + ## X-Wago-ID)
+#   - WoWInterface    (WOWI_API_TOKEN + ## X-WoWI-ID)
+
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Existing git tag to build/publish (e.g. v0.1.1)"
+      mode:
+        description: "publish-tag = package an existing tag; bump-and-publish = bump, tag, push (package follows on tag)"
         required: true
+        type: choice
+        options:
+          - publish-tag
+          - bump-and-publish
+        default: publish-tag
+      tag:
+        description: "Existing tag to publish (publish-tag mode), e.g. v0.3.0"
+        required: false
         type: string
+      bump:
+        description: "Semver bump (bump-and-publish mode)"
+        required: false
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+      message:
+        description: "Changelog / commit message (bump-and-publish mode)"
+        required: false
+        type: string
+      skip_upload:
+        description: "Package only (skip CurseForge / Wago / WoWI / GitHub upload)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  release:
+  bump:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'bump-and-publish'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump version, commit, and tag
+        shell: bash
+        env:
+          BUMP: ${{ inputs.bump }}
+          MESSAGE: ${{ inputs.message }}
+        run: |
+          set -euo pipefail
+          TOC="SkillGuideForever.toc"
+          current="$(awk -F: '/^## Version:/ { gsub(/[ \t\r]/,"",$2); print $2; exit }' "$TOC")"
+          IFS='.' read -r major minor patch <<< "$current"
+          major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}
+          case "$BUMP" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+            *) echo "Unknown bump: $BUMP"; exit 1 ;;
+          esac
+          new="${major}.${minor}.${patch}"
+          tag="v${new}"
+
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists"
+            exit 1
+          fi
+
+          sed -i -E "s/^## Version:.*/## Version: ${new}/" "$TOC"
+          msg="${MESSAGE:-Release ${new}}"
+          date="$(date -u +%Y-%m-%d)"
+
+          python3 - "$new" "$date" "$msg" <<'PY'
+          import sys
+          from pathlib import Path
+
+          version, date, message = sys.argv[1], sys.argv[2], sys.argv[3]
+          path = Path("CHANGELOG.md")
+          text = path.read_text(encoding="utf-8")
+          if f"## {version} " not in text:
+              entry = (
+                  f"## {version} - {date}\n\n"
+                  f"### Changed\n"
+                  f"- {message}\n\n"
+              )
+              needle = "# Changelog\n\n"
+              text = text.replace(needle, needle + entry, 1) if needle in text else entry + text
+              path.write_text(text, encoding="utf-8")
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add SkillGuideForever.toc CHANGELOG.md
+          git commit -m "$msg"
+          git tag -a "$tag" -m "SkillGuide Forever ${new}"
+
+          if [[ "${GITHUB_REF_TYPE}" == "branch" ]]; then
+            branch="${GITHUB_REF_NAME}"
+          else
+            branch="master"
+          fi
+          git push origin "HEAD:refs/heads/${branch}"
+          git push origin "$tag"
+
+          {
+            echo "## Bump complete"
+            echo ""
+            echo "\`$current\` -> \`$new\` (tag \`$tag\`) on \`$branch\`"
+            echo ""
+            echo "Packaging starts automatically from the tag push."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'publish-tag')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,14 +143,93 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require tag checkout
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${TAG}" ]]; then
+            echo "publish-tag mode requires a tag input (e.g. v0.3.0)"
+            exit 1
+          fi
+          git rev-parse "$TAG" >/dev/null
+
+      - name: Release preflight
+        shell: bash
+        env:
+          HAS_CF: ${{ secrets.CF_API_KEY != '' }}
+          HAS_WAGO: ${{ secrets.WAGO_API_TOKEN != '' }}
+          HAS_WOWI: ${{ secrets.WOWI_API_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          TOC="SkillGuideForever.toc"
+          curse_id="$(awk -F: '/^## X-Curse-Project-ID:/ { gsub(/[ \t\r]/,"",$2); print $2; exit }' "$TOC" || true)"
+          wago_id="$(awk -F: '/^## X-Wago-ID:/ { gsub(/[ \t\r]/,"",$2); print $2; exit }' "$TOC" || true)"
+          wowi_id="$(awk -F: '/^## X-WoWI-ID:/ { gsub(/[ \t\r]/,"",$2); print $2; exit }' "$TOC" || true)"
+          toc_ver="$(awk -F: '/^## Version:/ { gsub(/[ \t\r]/,"",$2); print $2; exit }' "$TOC" || true)"
+
+          {
+            echo "## Release preflight"
+            echo ""
+            echo "| Target | Status |"
+            echo "|--------|--------|"
+            if [[ "${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload }}" == "true" ]]; then
+              echo "| All uploads | skipped (skip_upload) |"
+            else
+              echo "| GitHub Release | will publish |"
+              if [[ "$HAS_CF" == "true" && -n "$curse_id" ]]; then
+                echo "| CurseForge (\`$curse_id\`) | will publish |"
+              elif [[ -n "$curse_id" ]]; then
+                echo "| CurseForge (\`$curse_id\`) | skipped (missing secret \`CF_API_KEY\`) |"
+              else
+                echo "| CurseForge | skipped (missing \`## X-Curse-Project-ID\`) |"
+              fi
+              if [[ "$HAS_WAGO" == "true" && -n "$wago_id" ]]; then
+                echo "| Wago (\`$wago_id\`) | will publish |"
+              elif [[ -n "$wago_id" ]]; then
+                echo "| Wago (\`$wago_id\`) | skipped (missing secret \`WAGO_API_TOKEN\`) |"
+              else
+                echo "| Wago | skipped (add \`## X-Wago-ID\` + secret \`WAGO_API_TOKEN\`) |"
+              fi
+              if [[ "$HAS_WOWI" == "true" && -n "$wowi_id" ]]; then
+                echo "| WoWInterface (\`$wowi_id\`) | will publish |"
+              elif [[ -n "$wowi_id" ]]; then
+                echo "| WoWInterface (\`$wowi_id\`) | skipped (missing secret \`WOWI_API_TOKEN\`) |"
+              else
+                echo "| WoWInterface | skipped (optional) |"
+              fi
+            fi
+            echo ""
+            echo "TOC version: \`$toc_ver\`"
+            echo "Ref: \`${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Package and publish
         uses: BigWigsMods/packager@v2
+        with:
+          # Forever-labeled artifact; supported client still comes from ## Interface: 16001.
+          args: >-
+            -n "{package-name}-{project-version}-forever:{project-version}-forever"
+            ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload && '-d' || '' }}
         env:
-          # Required for CurseForge upload:
-          #   1) ## X-Curse-Project-ID in SkillGuideForever.toc
-          #   2) repo secret CF_API_KEY
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          CF_API_TOKEN: ${{ secrets.CF_API_KEY }}
           WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
           WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Links
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo ""
+            echo "## Links"
+            echo "- Actions run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- Releases: ${{ github.server_url }}/${{ github.repository }}/releases"
+            echo "- CurseForge: https://www.curseforge.com/wow/addons/skillguideforever"
+          } >> "$GITHUB_STEP_SUMMARY"

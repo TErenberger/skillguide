@@ -3,7 +3,8 @@
   Refresh skill data (optional), bump version, commit, tag, and push a release.
 
   Pushing tag vX.Y.Z triggers .github/workflows/release.yml which packages the
-  addon and uploads to CurseForge (when CF_API_KEY + X-Curse-Project-ID are set).
+  addon and uploads to GitHub Releases, CurseForge, and Wago (when each host's
+  TOC id + secret are set).
 
 .EXAMPLE
   # After a Forever patch: pull new Wowhead data and ship a patch release
@@ -61,25 +62,27 @@ function Bump-Version([string]$current, [string]$kind) {
     return "$major.$minor.$patch"
 }
 
-function Ensure-CurseReady {
+function Ensure-PublishReady {
     $toc = Get-Content ".\SkillGuideForever.toc" -Raw
-    $hasId = $toc -match '(?m)^## X-Curse-Project-ID:\s*\d+\s*$'
-    if (-not $hasId) {
-        Write-Host ""
-        Write-Host "WARNING: ## X-Curse-Project-ID is missing from SkillGuideForever.toc" -ForegroundColor Yellow
-        Write-Host "  Find it on https://authors.curseforge.com/ (Project ID on your project page)." -ForegroundColor Yellow
-        Write-Host "  Add:  ## X-Curse-Project-ID: YOUR_ID" -ForegroundColor Yellow
-        Write-Host "  Without it, GitHub Release still works but CurseForge upload is skipped." -ForegroundColor Yellow
-        Write-Host ""
+    $secrets = gh secret list -R TErenberger/skillguide 2>$null
+
+    if ($toc -notmatch '(?m)^## X-Curse-Project-ID:\s*\d+\s*$') {
+        Write-Host "WARNING: ## X-Curse-Project-ID missing from TOC (CurseForge upload skipped)." -ForegroundColor Yellow
+    }
+    if ($secrets -notmatch "CF_API_KEY") {
+        Write-Host "WARNING: GitHub secret CF_API_KEY is not set." -ForegroundColor Yellow
+        Write-Host "  gh secret set CF_API_KEY -R TErenberger/skillguide" -ForegroundColor Yellow
     }
 
-    $secrets = gh secret list -R TErenberger/skillguide 2>$null
-    if (-not ($secrets -match "CF_API_KEY")) {
-        Write-Host "WARNING: GitHub secret CF_API_KEY is not set." -ForegroundColor Yellow
-        Write-Host "  Create a token at https://authors.curseforge.com/account/api-tokens" -ForegroundColor Yellow
-        Write-Host "  Then run:  gh secret set CF_API_KEY -R TErenberger/skillguide" -ForegroundColor Yellow
-        Write-Host ""
+    if ($toc -notmatch '(?m)^## X-Wago-ID:\s*\S+\s*$') {
+        Write-Host "NOTE: ## X-Wago-ID missing from TOC (Wago upload skipped until set)." -ForegroundColor DarkYellow
+        Write-Host "  Create the project on https://addons.wago.io/ then add the id to the TOC." -ForegroundColor DarkYellow
     }
+    if ($secrets -notmatch "WAGO_API_TOKEN") {
+        Write-Host "NOTE: GitHub secret WAGO_API_TOKEN is not set (Wago upload skipped)." -ForegroundColor DarkYellow
+        Write-Host "  gh secret set WAGO_API_TOKEN -R TErenberger/skillguide" -ForegroundColor DarkYellow
+    }
+    Write-Host ""
 }
 
 $oldVersion = Get-TocVersion
@@ -104,7 +107,7 @@ Write-Host "  push    : $Push"
 Write-Host "  dry-run : $DryRun"
 Write-Host ""
 
-Ensure-CurseReady
+Ensure-PublishReady
 
 if ($UpdateData) {
     Write-Host "Refreshing skill data from Wowhead..." -ForegroundColor Cyan
