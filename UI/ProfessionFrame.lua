@@ -1,6 +1,7 @@
 local addonName, ns = ...
 
 local ROW_HEIGHT = 42
+local HEADER_HEIGHT = 22
 local FRAME_WIDTH = 400
 local FRAME_HEIGHT = 512
 local LIST_INSET = 12
@@ -89,18 +90,27 @@ local function TintText(color, text)
 end
 
 local function FormatSkillBreakpoints(entry)
+    -- Wowhead sometimes stores orange as 0 for recipe-taught spells; fall back
+    -- to the learn skill (Requires Profession (N) on the teaching recipe).
+    local orange = entry.orange or 0
+    if orange <= 0 then
+        orange = entry.skill or 0
+        if orange <= 0 and (entry.yellow or 0) > 0 then
+            orange = 1
+        end
+    end
     return string.format(
         "%s%d|r/%s%d|r/%s%d|r/%s%d|r",
-        SKILL_ORANGE, entry.orange or 0,
+        SKILL_ORANGE, orange,
         SKILL_YELLOW, entry.yellow or 0,
         SKILL_GREEN, entry.green or 0,
         SKILL_GRAY, entry.gray or 0
     )
 end
 
+-- Learn skill lives on section headers; rows show source / breakpoints / status.
 local function FormatSubtext(entry, status, subColor)
     local parts = {}
-    parts[#parts + 1] = TintText(subColor, "Skill " .. tostring(entry.skill or 0))
     if entry.trainer then
         parts[#parts + 1] = TintText(subColor, "Trainer")
     else
@@ -116,7 +126,24 @@ local function FormatSubtext(entry, status, subColor)
     elseif status == "locked" then
         parts[#parts + 1] = TintText(subColor, "Locked")
     end
+    if #parts == 0 then
+        return ""
+    end
     return table.concat(parts, TintText(subColor, "  -  "))
+end
+
+local function BuildSkillGroupedList(recipes)
+    local list = {}
+    local lastSkill = nil
+    for _, entry in ipairs(recipes) do
+        local skill = entry.skill or 0
+        if skill ~= lastSkill then
+            list[#list + 1] = { kind = "header", skill = skill }
+            lastSkill = skill
+        end
+        list[#list + 1] = { kind = "recipe", entry = entry }
+    end
+    return list
 end
 
 local function GetPlayerProfessionSkill(key)
@@ -232,6 +259,77 @@ local function HideUnusedRows(fromIndex)
     end
 end
 
+local function ConfigureHeaderRow(row, skill)
+    row.kind = "header"
+    row.spellID = nil
+    row.displayName = nil
+    row.statusText = nil
+    row:SetHeight(HEADER_HEIGHT)
+    row:EnableMouse(false)
+    row.iconBorder:Hide()
+    row.icon:Hide()
+    row.sub:Hide()
+    SafeSetText(row.sub, "")
+    row.name:ClearAllPoints()
+    row.name:SetPoint("LEFT", row, "LEFT", 6, 0)
+    row.name:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    SafeSetText(row.name, "Skill " .. tostring(skill or 0))
+    row.name:SetTextColor(COLOR_LABEL[1], COLOR_LABEL[2], COLOR_LABEL[3])
+    local hl = row:GetHighlightTexture()
+    if hl then
+        hl:SetAlpha(0)
+    end
+end
+
+local function ConfigureRecipeRow(row, entry)
+    row.kind = "recipe"
+    row:SetHeight(ROW_HEIGHT)
+    row:EnableMouse(true)
+    row.iconBorder:Show()
+    row.icon:Show()
+    row.sub:Show()
+    row.name:ClearAllPoints()
+    row.name:SetPoint("TOPLEFT", row.iconBorder, "TOPRIGHT", 6, -4)
+    row.name:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+
+    local name, iconID = GetSpellDisplay(entry.spellID, entry.name)
+    local status, nameColor, subColor = GetRowStatus(entry)
+
+    row.spellID = entry.spellID
+    row.displayName = name
+    row.icon:SetTexture(iconID)
+    SafeSetText(row.name, name)
+    SafeSetText(row.sub, FormatSubtext(entry, status, subColor))
+    row.name:SetTextColor(nameColor[1], nameColor[2], nameColor[3])
+    -- Subtext embeds its own |c colors (incl. O/Y/G/Gray breakpoints).
+    row.sub:SetTextColor(1, 1, 1)
+
+    row:SetAlpha(1)
+    if status == "known" then
+        row.statusText = "Already known"
+        row.icon:SetDesaturated(true)
+        row.icon:SetVertexColor(0.85, 0.85, 0.85)
+    elseif status == "locked" then
+        row.statusText = "Requires skill " .. tostring(entry.skill)
+        row.icon:SetDesaturated(false)
+        row.icon:SetVertexColor(1, 1, 1)
+    elseif status == "available" then
+        row.statusText = "Available to learn"
+        row.icon:SetDesaturated(false)
+        row.icon:SetVertexColor(1, 1, 1)
+    else
+        row.statusText = nil
+        row.icon:SetDesaturated(false)
+        row.icon:SetVertexColor(1, 1, 1)
+    end
+
+    local hl = row:GetHighlightTexture()
+    if hl then
+        hl:SetAlpha(0.25)
+        hl:SetVertexColor(0.6, 0.45, 0.2)
+    end
+end
+
 local function IsHideKnownEnabled()
     return ns.db and ns.db.hideKnownProfession
 end
@@ -304,50 +402,31 @@ function ns.RefreshProfessionList()
         profFrame.hideKnownCheck:SetChecked(IsHideKnownEnabled())
     end
 
+    local list = BuildSkillGroupedList(recipes)
     local y = -4
-    for i, entry in ipairs(recipes) do
+    local totalHeight = 8
+    for i, item in ipairs(list) do
         local row = AcquireRow(i)
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, y)
         row:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", 0, y)
 
-        local name, iconID = GetSpellDisplay(entry.spellID, entry.name)
-        local status, nameColor, subColor = GetRowStatus(entry)
-
-        row.spellID = entry.spellID
-        row.displayName = name
-        row.icon:SetTexture(iconID)
-        SafeSetText(row.name, name)
-        SafeSetText(row.sub, FormatSubtext(entry, status, subColor))
-        row.name:SetTextColor(nameColor[1], nameColor[2], nameColor[3])
-        -- Subtext embeds its own |c colors (incl. O/Y/G/Gray breakpoints).
-        row.sub:SetTextColor(1, 1, 1)
-
-        row:SetAlpha(1)
-        if status == "known" then
-            row.statusText = "Already known"
-            row.icon:SetDesaturated(true)
-            row.icon:SetVertexColor(0.85, 0.85, 0.85)
-        elseif status == "locked" then
-            row.statusText = "Requires skill " .. tostring(entry.skill)
-            row.icon:SetDesaturated(false)
-            row.icon:SetVertexColor(1, 1, 1)
-        elseif status == "available" then
-            row.statusText = "Available to learn"
-            row.icon:SetDesaturated(false)
-            row.icon:SetVertexColor(1, 1, 1)
+        local rowHeight
+        if item.kind == "header" then
+            ConfigureHeaderRow(row, item.skill)
+            rowHeight = HEADER_HEIGHT
         else
-            row.statusText = nil
-            row.icon:SetDesaturated(false)
-            row.icon:SetVertexColor(1, 1, 1)
+            ConfigureRecipeRow(row, item.entry)
+            rowHeight = ROW_HEIGHT
         end
 
         row:Show()
-        y = y - ROW_HEIGHT
+        y = y - rowHeight
+        totalHeight = totalHeight + rowHeight
     end
 
-    HideUnusedRows(#recipes + 1)
-    scrollChild:SetHeight(math.max(1, #recipes * ROW_HEIGHT + 8))
+    HideUnusedRows(#list + 1)
+    scrollChild:SetHeight(math.max(1, totalHeight))
 
     local parts = {
         string.format("%s - %d recipes", ns.GetProfessionDisplayName(key), #recipes),
