@@ -2,7 +2,7 @@
 ## Title: SkillGuide Forever
 ## Notes: Browse Forever class skills and profession recipes with train/skill levels.
 ## Author: Trey
-## Version: 0.2.0
+## Version: 0.3.0
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 ## Category: Class
 ## SavedVariables: SkillGuideForeverDB

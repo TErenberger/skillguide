@@ -23,6 +23,8 @@ Made for **WoW Forever** — not Classic Era leftovers.
 
 That’s it. Pick a class or profession from the dropdown, optionally turn on **Hide known**, and go.
 
+Open chat, then **Shift-click** a row to paste a clickable spell/recipe link.
+
 **Colors on your character:** green = you can learn it now · grey = already known · red = not yet (level or skill too low).
 
 ## Install

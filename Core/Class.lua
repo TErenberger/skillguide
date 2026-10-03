@@ -82,3 +82,64 @@ function ns.GetPlayerLevel()
     end
     return level
 end
+
+--- Build a spell hyperlink and insert it into the active chat edit box (Shift-click / CHATLINK).
+--- Returns true if a link was inserted.
+function ns.TryInsertSpellChatLink(spellID, fallbackName)
+    if not spellID then
+        return false
+    end
+    if IsModifiedClick and not IsModifiedClick("CHATLINK") then
+        return false
+    end
+
+    local link
+    if C_Spell and C_Spell.GetSpellLink then
+        local ok, result = pcall(C_Spell.GetSpellLink, spellID)
+        if ok then
+            link = result
+        end
+    end
+    if (not link or link == "") and GetSpellLink then
+        local ok, result = pcall(GetSpellLink, spellID)
+        if ok then
+            link = result
+        end
+    end
+
+    -- Some clients return a bare name; build a proper |Hspell:| hyperlink.
+    if type(link) ~= "string" or link == "" or not string.find(link, "|H", 1, true) then
+        local name = fallbackName
+        if (not name or name == "") and C_Spell and C_Spell.GetSpellName then
+            local ok, result = pcall(C_Spell.GetSpellName, spellID)
+            if ok then
+                name = result
+            end
+        end
+        if not name or name == "" then
+            name = "Spell " .. tostring(spellID)
+        end
+        name = string.gsub(name, "[%[%]]", "")
+        link = string.format("|cff71d5ff|Hspell:%d|h[%s]|h|r", spellID, name)
+    end
+
+    if ChatEdit_InsertLink then
+        local ok, inserted = pcall(ChatEdit_InsertLink, link)
+        if ok and inserted then
+            return true
+        end
+    end
+    if ChatFrameUtil and ChatFrameUtil.InsertLink then
+        local ok, inserted = pcall(ChatFrameUtil.InsertLink, link)
+        if ok and inserted then
+            return true
+        end
+    end
+
+    local editBox = ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow()
+    if editBox and editBox.Insert then
+        editBox:Insert(link)
+        return true
+    end
+    return false
+end

@@ -95,7 +95,7 @@ local function FormatSubtext(entry, status)
     elseif status == "locked" then
         parts[#parts + 1] = "Locked"
     end
-    return table.concat(parts, "  Â·  ")
+    return table.concat(parts, "  -  ")
 end
 
 local function AcquireRow(index)
@@ -135,6 +135,12 @@ local function AcquireRow(index)
     row.sub:SetJustifyH("LEFT")
     row.sub:SetWordWrap(false)
 
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row:SetScript("OnClick", function(self)
+        if self.spellID then
+            ns.TryInsertSpellChatLink(self.spellID, self.displayName)
+        end
+    end)
     row:SetScript("OnEnter", function(self)
         if not self.spellID then
             return
@@ -149,6 +155,8 @@ local function AcquireRow(index)
             GameTooltip:AddLine(" ")
             GameTooltip:AddLine(self.statusText, 0.9, 0.85, 0.7)
         end
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Shift-click to link in chat", 0.65, 0.65, 0.65)
         GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function()
@@ -319,7 +327,7 @@ function ns.RefreshSkillList()
     scrollChild:SetHeight(math.max(1, #skills * ROW_HEIGHT + 8))
 
     local parts = {
-        string.format("%s â€” %d skills", ns.GetClassDisplayName(classFile), #skills),
+        string.format("%s - %d skills", ns.GetClassDisplayName(classFile), #skills),
     }
     if hiddenKnown > 0 then
         parts[#parts + 1] = string.format("%d known hidden", hiddenKnown)
@@ -487,13 +495,15 @@ function ns.CreateMainFrame()
     StyleContentInset(inset)
 
     -- Toolbar: class, hide known, search, count
+    -- Clear the large ButtonFrame portrait that overlaps the top-left inset.
+    local TOOLBAR_LEFT = 56
     local toolbar = CreateFrame("Frame", nil, mainFrame)
     toolbar:SetHeight(72)
     if inset then
-        toolbar:SetPoint("TOPLEFT", inset, "TOPLEFT", 8, -4)
+        toolbar:SetPoint("TOPLEFT", inset, "TOPLEFT", TOOLBAR_LEFT, -4)
         toolbar:SetPoint("TOPRIGHT", inset, "TOPRIGHT", -8, -4)
     else
-        toolbar:SetPoint("TOPLEFT", 12, -60)
+        toolbar:SetPoint("TOPLEFT", TOOLBAR_LEFT + 4, -60)
         toolbar:SetPoint("TOPRIGHT", -12, -60)
     end
 
