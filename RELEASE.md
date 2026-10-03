@@ -68,7 +68,7 @@ Watch progress: https://github.com/TErenberger/skillguide/actions
 ## Suggested Forever-patch habit
 
 1. `.\release.ps1 -UpdateData -Bump patch -Push`
-2. In-game `/reload`, spot-check `/sgf` on your class
+2. In-game `/reload`, spot-check `/sg` and `/pg`
 3. If something looks wrong, fix, then `.\release.ps1 -Bump patch -Message "Fix …" -Push`
 
 You do **not** need to re-upload a zip in the CurseForge UI once secrets + project ID are wired.

@@ -17,7 +17,7 @@ Checklist for shipping SkillGuide Forever to CurseForge, Wago, and WoWInterface.
 .\package.ps1 -Version 0.1.0
 ```
 
-Smoke-test in Forever beta (`/sgf`) after `/reload`.
+Smoke-test in Forever beta (`/sg` and `/pg`) after `/reload`.
 
 Player zip lands in `dist\SkillGuideForever-0.1.0.zip` with layout:
 

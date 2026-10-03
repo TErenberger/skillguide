@@ -27,12 +27,26 @@ function eventFrame:ADDON_LOADED(loaded)
     if ns.db.hideKnown == nil then
         ns.db.hideKnown = false
     end
+    if ns.db.selectedProfession == nil then
+        ns.db.selectedProfession = nil
+    end
+    if ns.db.hideKnownProfession == nil then
+        ns.db.hideKnownProfession = false
+    end
+    if ns.db.professionPoint == nil then
+        ns.db.professionPoint = "CENTER"
+        ns.db.professionX = 40
+        ns.db.professionY = 0
+    end
     self:UnregisterEvent("ADDON_LOADED")
 end
 
 function eventFrame:PLAYER_LOGIN()
     if not ns.db.selectedClass then
         ns.db.selectedClass = ns.GetPlayerClassFile()
+    end
+    if not ns.db.selectedProfession then
+        ns.db.selectedProfession = ns.GetDefaultProfessionKey and ns.GetDefaultProfessionKey() or "ALCHEMY"
     end
     if ns.CreateMainFrame then
         ns.CreateMainFrame()
@@ -42,6 +56,9 @@ end
 function eventFrame:SPELL_DATA_LOAD_RESULT(spellID, success)
     if ns.OnSpellDataLoaded then
         ns.OnSpellDataLoaded(spellID, success)
+    end
+    if ns.OnProfessionSpellDataLoaded then
+        ns.OnProfessionSpellDataLoaded(spellID, success)
     end
 end
 
@@ -54,6 +71,15 @@ end
 function eventFrame:SPELLS_CHANGED()
     if ns.RefreshSkillList then
         ns.RefreshSkillList()
+    end
+    if ns.RefreshProfessionList then
+        ns.RefreshProfessionList()
+    end
+end
+
+function eventFrame:SKILL_LINES_CHANGED()
+    if ns.RefreshProfessionList then
+        ns.RefreshProfessionList()
     end
 end
 
@@ -68,11 +94,20 @@ eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("SPELL_DATA_LOAD_RESULT")
 eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
 eventFrame:RegisterEvent("SPELLS_CHANGED")
+eventFrame:RegisterEvent("SKILL_LINES_CHANGED")
 
-SLASH_SKILLGUIDEFOREVER1 = "/skillguideforever"
-SLASH_SKILLGUIDEFOREVER2 = "/sgf"
+SLASH_SKILLGUIDEFOREVER1 = "/sg"
+SLASH_SKILLGUIDEFOREVER2 = "/skillguideforever"
 SlashCmdList.SKILLGUIDEFOREVER = function()
     if ns.ToggleMainFrame then
         ns.ToggleMainFrame()
+    end
+end
+
+SLASH_SKILLGUIDEFOREVERPROF1 = "/pg"
+SLASH_SKILLGUIDEFOREVERPROF2 = "/skillguideprofessions"
+SlashCmdList.SKILLGUIDEFOREVERPROF = function()
+    if ns.ToggleProfessionFrame then
+        ns.ToggleProfessionFrame()
     end
 end
