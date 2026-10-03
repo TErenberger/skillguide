@@ -9,7 +9,7 @@
 ## X-Website: https://www.curseforge.com/wow/addons/skillguideforever
 ## X-License: MIT
 ## X-Source: https://github.com/TErenberger/skillguide
-## X-Curse-Project-ID: 0
+## X-Curse-Project-ID: 1723468
 
 Core\Data.lua
 Core\Class.lua
