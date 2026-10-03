@@ -1,12 +1,15 @@
-package-as: SkillGuide
+package-as: SkillGuideForever
 
 # Dev tools stay in git but are not shipped to CurseForge / Wago / WoWI.
 ignore:
   - tools
+  - media
   - update-data.ps1
   - update-data.bat
   - package.ps1
+  - release.ps1
   - PUBLISHING.md
+  - RELEASE.md
   - .github
   - .gitignore
 

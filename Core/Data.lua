@@ -1,4 +1,4 @@
--- Forever class skill seed for SkillGuide.
+﻿-- Forever class skill seed for SkillGuideForever.
 -- Source: Wowhead Forever ability listviews
 --   https://www.wowhead.com/forever/spells/abilities/
 -- Generated: 2026-10-03 02:24 UTC

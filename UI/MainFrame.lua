@@ -1,4 +1,4 @@
-local addonName, ns = ...
+﻿local addonName, ns = ...
 
 -- Spellbook-like row: icon + name + subtext (rank / train level)
 local ROW_HEIGHT = 42
@@ -95,7 +95,7 @@ local function FormatSubtext(entry, status)
     elseif status == "locked" then
         parts[#parts + 1] = "Locked"
     end
-    return table.concat(parts, "  ·  ")
+    return table.concat(parts, "  Â·  ")
 end
 
 local function AcquireRow(index)
@@ -319,7 +319,7 @@ function ns.RefreshSkillList()
     scrollChild:SetHeight(math.max(1, #skills * ROW_HEIGHT + 8))
 
     local parts = {
-        string.format("%s — %d skills", ns.GetClassDisplayName(classFile), #skills),
+        string.format("%s â€” %d skills", ns.GetClassDisplayName(classFile), #skills),
     }
     if hiddenKnown > 0 then
         parts[#parts + 1] = string.format("%d known hidden", hiddenKnown)
@@ -417,10 +417,10 @@ local function StyleContentInset(inset)
     end
 
     -- Darker list well so gold / cream / green text stays high-contrast
-    local panel = inset.SkillGuidePanel
+    local panel = inset.SkillGuideForeverPanel
     if not panel then
         panel = inset:CreateTexture(nil, "BACKGROUND", nil, 1)
-        inset.SkillGuidePanel = panel
+        inset.SkillGuideForeverPanel = panel
     end
     panel:SetPoint("TOPLEFT", 3, -3)
     panel:SetPoint("BOTTOMRIGHT", -3, 3)
@@ -433,7 +433,7 @@ function ns.CreateMainFrame()
     end
 
     -- ButtonFrameTemplate = Forever Character/Spellbook chrome (portrait, gold title, close)
-    mainFrame = CreateFrame("Frame", "SkillGuideFrame", UIParent, "ButtonFrameTemplate")
+    mainFrame = CreateFrame("Frame", "SkillGuideForeverFrame", UIParent, "ButtonFrameTemplate")
     mainFrame:SetSize(FRAME_WIDTH, FRAME_HEIGHT)
     mainFrame:SetFrameStrata("HIGH")
     mainFrame:SetToplevel(true)
@@ -443,7 +443,7 @@ function ns.CreateMainFrame()
     mainFrame:SetClampedToScreen(true)
     mainFrame:Hide()
 
-    ApplyTitle(mainFrame, "SkillGuide")
+    ApplyTitle(mainFrame, "SkillGuide Forever")
 
     if ButtonFrameTemplate_HideButtonBar then
         ButtonFrameTemplate_HideButtonBar(mainFrame)
@@ -502,12 +502,12 @@ function ns.CreateMainFrame()
     classLabel:SetText("Class")
     classLabel:SetTextColor(COLOR_LABEL[1], COLOR_LABEL[2], COLOR_LABEL[3])
 
-    local dropdown = CreateFrame("Frame", "SkillGuideClassDropdown", toolbar, "UIDropDownMenuTemplate")
+    local dropdown = CreateFrame("Frame", "SkillGuideForeverClassDropdown", toolbar, "UIDropDownMenuTemplate")
     dropdown:SetPoint("LEFT", classLabel, "RIGHT", -12, -2)
     mainFrame.classDropdown = dropdown
     InitClassDropdown(dropdown)
 
-    local hideKnown = CreateFrame("CheckButton", "SkillGuideHideKnownCheck", toolbar, "UICheckButtonTemplate")
+    local hideKnown = CreateFrame("CheckButton", "SkillGuideForeverHideKnownCheck", toolbar, "UICheckButtonTemplate")
     hideKnown:SetSize(24, 24)
     hideKnown:SetPoint("TOPRIGHT", 4, 2)
     hideKnown:SetChecked(IsHideKnownEnabled())
@@ -535,10 +535,10 @@ function ns.CreateMainFrame()
 
     local search
     local okSearch = pcall(function()
-        search = CreateFrame("EditBox", "SkillGuideSearchBox", toolbar, "SearchBoxTemplate")
+        search = CreateFrame("EditBox", "SkillGuideForeverSearchBox", toolbar, "SearchBoxTemplate")
     end)
     if not okSearch or not search then
-        search = CreateFrame("EditBox", "SkillGuideSearchBox", toolbar, "InputBoxTemplate")
+        search = CreateFrame("EditBox", "SkillGuideForeverSearchBox", toolbar, "InputBoxTemplate")
         search:SetTextInsets(8, 8, 0, 0)
     end
     search:SetHeight(22)
@@ -581,7 +581,7 @@ function ns.CreateMainFrame()
     SafeSetText(mainFrame.subtitle, "")
 
     -- Scrollable skill list
-    scrollFrame = CreateFrame("ScrollFrame", "SkillGuideScrollFrame", mainFrame, "UIPanelScrollFrameTemplate")
+    scrollFrame = CreateFrame("ScrollFrame", "SkillGuideForeverScrollFrame", mainFrame, "UIPanelScrollFrameTemplate")
     if inset then
         scrollFrame:SetPoint("TOPLEFT", inset, "TOPLEFT", LIST_INSET, -80)
         scrollFrame:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -28, LIST_INSET)
@@ -591,7 +591,7 @@ function ns.CreateMainFrame()
     end
 
     -- Tint scrollbar to bronze so it sits on parchment
-    local scrollBar = scrollFrame.ScrollBar or _G["SkillGuideScrollFrameScrollBar"]
+    local scrollBar = scrollFrame.ScrollBar or _G["SkillGuideForeverScrollFrameScrollBar"]
     if scrollBar then
         scrollBar:SetFrameLevel(scrollFrame:GetFrameLevel() + 2)
     end
@@ -618,7 +618,7 @@ function ns.CreateMainFrame()
         end
     end)
 
-    tinsert(UISpecialFrames, "SkillGuideFrame")
+    tinsert(UISpecialFrames, "SkillGuideForeverFrame")
     return mainFrame
 end
 

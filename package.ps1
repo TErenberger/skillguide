@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Build a player-ready SkillGuide zip for manual CurseForge / Wago / WoWI upload.
+  Build a player-ready SkillGuideForever zip for manual CurseForge / Wago / WoWI upload.
 
 .EXAMPLE
   .\package.ps1
@@ -21,13 +21,13 @@ if (-not $OutDir) {
 }
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
-$stage = Join-Path $env:TEMP ("SkillGuide-package-" + [guid]::NewGuid().ToString("n"))
-$addonRoot = Join-Path $stage "SkillGuide"
+$stage = Join-Path $env:TEMP ("SkillGuideForever-package-" + [guid]::NewGuid().ToString("n"))
+$addonRoot = Join-Path $stage "SkillGuideForever"
 New-Item -ItemType Directory -Force -Path $addonRoot | Out-Null
 
 $files = @(
-    "SkillGuide.toc",
-    "SkillGuide.lua",
+    "SkillGuideForever.toc",
+    "SkillGuideForever.lua",
     "LICENSE",
     "README.md",
     "CHANGELOG.md",
@@ -47,21 +47,15 @@ foreach ($rel in $files) {
     Copy-Item $src $dest -Force
 }
 
-# Replace packager version token for manual zips
-$tocPath = Join-Path $addonRoot "SkillGuide.toc"
-$toc = Get-Content $tocPath -Raw
-$toc = $toc -replace "@project-version@", $Version
-Set-Content -Path $tocPath -Value $toc -NoNewline -Encoding UTF8
-
-$zipName = "SkillGuide-$Version.zip"
+$zipName = "SkillGuideForever-$Version.zip"
 $zipPath = Join-Path $OutDir $zipName
 if (Test-Path $zipPath) {
     Remove-Item $zipPath -Force
 }
 
-Compress-Archive -Path (Join-Path $stage "SkillGuide") -DestinationPath $zipPath -CompressionLevel Optimal
+Compress-Archive -Path (Join-Path $stage "SkillGuideForever") -DestinationPath $zipPath -CompressionLevel Optimal
 Remove-Item $stage -Recurse -Force
 
 Write-Host "Created $zipPath" -ForegroundColor Green
 Write-Host "Upload this zip to CurseForge / Wago / WoWInterface (Forever / interface 16001)."
-Write-Host "Zip layout: SkillGuide\SkillGuide.toc + lua files"
+Write-Host "Zip layout: SkillGuideForever\SkillGuideForever.toc + lua files"

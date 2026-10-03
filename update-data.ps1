@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Refresh SkillGuide Forever skill data from Wowhead and optionally deploy it.
+  Refresh SkillGuideForever Forever skill data from Wowhead and optionally deploy it.
 
 .EXAMPLE
   .\update-data.ps1
@@ -15,7 +15,7 @@ param(
     [switch]$DryRun,
     [ValidateSet("warrior","paladin","hunter","rogue","priest","shaman","mage","warlock","druid")]
     [string[]]$Class,
-    [string]$AddonsDir = "C:\Program Files\World of Warcraft\_classic_beta_\Interface\AddOns\SkillGuide"
+    [string]$AddonsDir = "C:\Program Files\World of Warcraft\_classic_beta_\Interface\AddOns\SkillGuideForever"
 )
 
 $ErrorActionPreference = "Stop"

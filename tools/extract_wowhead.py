@@ -1,4 +1,4 @@
-"""
+﻿"""
 Fetch WoW Forever class trainer skills from Wowhead and write Core/Data.lua.
 
 Examples:
@@ -37,10 +37,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT_DIR = pathlib.Path(__file__).resolve().parent / "_cache"
 DATA_LUA = ROOT / "Core" / "Data.lua"
 DEFAULT_ADDONS = pathlib.Path(
-    r"C:\Program Files\World of Warcraft\_classic_beta_\Interface\AddOns\SkillGuide"
+    r"C:\Program Files\World of Warcraft\_classic_beta_\Interface\AddOns\SkillGuideForever"
 )
 SSL_CTX = ssl._create_unverified_context()
-USER_AGENT = "SkillGuideDataUpdater/1.0 (+local forever seed refresh)"
+USER_AGENT = "SkillGuideForeverDataUpdater/1.0 (+local forever seed refresh)"
 
 
 def fetch(url: str) -> str:
@@ -254,7 +254,7 @@ def extract_class(class_slug: str, *, from_cache: bool = False) -> list:
 
 def write_data_lua(all_data: dict, generated_at: str):
     lines = [
-        "-- Forever class skill seed for SkillGuide.",
+        "-- Forever class skill seed for SkillGuideForever.",
         "-- Source: Wowhead Forever ability listviews",
         "--   https://www.wowhead.com/forever/spells/abilities/",
         "-- Generated: %s" % generated_at,
@@ -288,7 +288,7 @@ def deploy_to_addons(addons_dir: pathlib.Path):
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
-        description="Update SkillGuide Forever skill seed from Wowhead."
+        description="Update SkillGuideForever Forever skill seed from Wowhead."
     )
     p.add_argument(
         "--class",
@@ -311,7 +311,7 @@ def parse_args(argv=None):
         "--addons-dir",
         type=pathlib.Path,
         default=DEFAULT_ADDONS,
-        help="SkillGuide AddOns folder (used with --deploy).",
+        help="SkillGuideForever AddOns folder (used with --deploy).",
     )
     p.add_argument(
         "--dry-run",
@@ -327,7 +327,7 @@ def main(argv=None) -> int:
     selected = args.classes or CLASSES
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-    print("SkillGuide data update")
+    print("SkillGuideForever data update")
     print("  mode    : %s" % ("cache" if args.from_cache else "live Wowhead"))
     print("  classes : %s" % ", ".join(selected))
     print("")

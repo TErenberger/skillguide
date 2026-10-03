@@ -1,4 +1,4 @@
-# SkillGuide
+# SkillGuide Forever
 
 A **WoW Forever** addon that lists class trainer skills, ranks, and the level required to train them. Defaults to your current class; use the dropdown to browse any class.
 
@@ -19,13 +19,11 @@ A **WoW Forever** addon that lists class trainer skills, ranks, and the level re
 
 Install normally with your addon client, or unpack so you have:
 
-`World of Warcraft\_classic_beta_\Interface\AddOns\SkillGuide\SkillGuide.toc`
+`World of Warcraft\_classic_beta_\Interface\AddOns\SkillGuideForever\SkillGuideForever.toc`
 
 Restart the client (or `/reload`).
 
 ### From this repo (developers)
-
-Copy the addon files into that AddOns folder, or run:
 
 ```powershell
 .\update-data.ps1 -Deploy
@@ -35,7 +33,7 @@ Copy the addon files into that AddOns folder, or run:
 
 | Command | Action |
 |---------|--------|
-| `/skillguide` or `/sg` | Toggle the window |
+| `/skillguideforever` or `/sgf` | Toggle the window |
 
 - **Class** dropdown — browse another class
 - **Hide known** — hide skills you already learned (your class only)
@@ -43,23 +41,25 @@ Copy the addon files into that AddOns folder, or run:
 
 Colors on your own class: green = can train, grey = known, red = locked.
 
-## Updating Forever skill data (authors)
+## Updating / releasing (authors)
 
-After beta patches change trainer lists:
-
-```powershell
-.\update-data.ps1 -Deploy
-```
-
-See [PUBLISHING.md](PUBLISHING.md) for CurseForge / Wago / WoWInterface release steps.
-
-## Packaging a player zip
+After a Forever patch, ship a new CurseForge build in one command:
 
 ```powershell
-.\package.ps1 -Version 0.1.0
+.\release.ps1 -UpdateData -Bump patch -Push
 ```
 
-Creates `dist\SkillGuide-0.1.0.zip` ready for manual upload.
+That refreshes Wowhead skill data, bumps the version, tags `vX.Y.Z`, and lets GitHub Actions upload to CurseForge.
+
+One-time CurseForge automation setup (project ID + API token) is in [RELEASE.md](RELEASE.md).
+
+| Script | Purpose |
+|--------|---------|
+| `.\release.ps1 -UpdateData -Bump patch -Push` | Full automated release |
+| `.\update-data.ps1 -Deploy` | Refresh data into local AddOns only |
+| `.\package.ps1 -Version 0.1.1` | Manual zip (no upload) |
+
+See also [PUBLISHING.md](PUBLISHING.md).
 
 ## License
 

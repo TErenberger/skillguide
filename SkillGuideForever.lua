@@ -6,8 +6,16 @@ function eventFrame:ADDON_LOADED(loaded)
     if loaded ~= addonName then
         return
     end
-    SkillGuideDB = SkillGuideDB or {}
-    ns.db = SkillGuideDB
+    -- Migrate settings from earlier local names if present.
+    if SkillGuideForeverDB == nil then
+        if type(TrainLedgerDB) == "table" then
+            SkillGuideForeverDB = TrainLedgerDB
+        elseif type(SkillGuideDB) == "table" then
+            SkillGuideForeverDB = SkillGuideDB
+        end
+    end
+    SkillGuideForeverDB = SkillGuideForeverDB or {}
+    ns.db = SkillGuideForeverDB
     if ns.db.point == nil then
         ns.db.point = "CENTER"
         ns.db.x = 0
@@ -61,9 +69,9 @@ eventFrame:RegisterEvent("SPELL_DATA_LOAD_RESULT")
 eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
 eventFrame:RegisterEvent("SPELLS_CHANGED")
 
-SLASH_SKILLGUIDE1 = "/skillguide"
-SLASH_SKILLGUIDE2 = "/sg"
-SlashCmdList.SKILLGUIDE = function()
+SLASH_SKILLGUIDEFOREVER1 = "/skillguideforever"
+SLASH_SKILLGUIDEFOREVER2 = "/sgf"
+SlashCmdList.SKILLGUIDEFOREVER = function()
     if ns.ToggleMainFrame then
         ns.ToggleMainFrame()
     end
