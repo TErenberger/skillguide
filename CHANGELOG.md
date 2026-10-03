@@ -2,6 +2,16 @@
 
 All notable changes to SkillGuide Forever are documented here.
 
+## 0.3.0 - 2026-10-03
+
+### Added
+- Shift-click (CHATLINK) a skill or profession recipe to insert a rich spell link into an open chat box
+
+### Changed
+- Profession skill-up breakpoints show as colored `##/##/##/##` (orange/yellow/green/grey) instead of an `O/Y/G/Gray` label
+- Removed the Profession label beside the dropdown; both toolbars clear the large frame portrait
+- Replaced Unicode dash/dot separators with ASCII so the client renders cleanly
+
 ## 0.2.0 - 2026-10-03
 
 ### Added

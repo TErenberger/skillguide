@@ -346,6 +346,17 @@ def extract_profession(slug: str, key: str, prefix: str, *, from_cache: bool = F
         yellow = int(colors[1]) if len(colors) > 1 else skill
         green = int(colors[2]) if len(colors) > 2 else skill
         gray = int(colors[3]) if len(colors) > 3 else skill
+        # Wowhead often leaves colors[0] as 0 for drop/recipe-taught spells.
+        # learnedat is the required profession skill to learn it (same value
+        # shown on the teaching recipe as "Requires <Profession> (N)").
+        if orange <= 0:
+            if skill > 0:
+                orange = skill
+            elif yellow > 0:
+                # Starter recipes (learnedat 0): orange band starts at 1.
+                orange = 1
+            else:
+                orange = 0
 
         rows.append(
             {

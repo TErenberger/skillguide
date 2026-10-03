@@ -1,6 +1,7 @@
 local addonName, ns = ...
 
 local ROW_HEIGHT = 42
+local HEADER_HEIGHT = 22
 local FRAME_WIDTH = 400
 local FRAME_HEIGHT = 512
 local LIST_INSET = 12
@@ -69,31 +70,80 @@ local function UpdateProfessionPortrait(key)
     portrait:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 end
 
-local function FormatSubtext(entry, status)
+-- Classic tradeskill difficulty colors (orange / yellow / green / grey).
+local SKILL_ORANGE = "|cffff7f3f"
+local SKILL_YELLOW = "|cffffff00"
+local SKILL_GREEN = "|cff40c040"
+local SKILL_GRAY = "|cff9d9d9d"
+
+local function HexFromColor(color)
+    return string.format(
+        "%02x%02x%02x",
+        math.floor((color[1] or 1) * 255 + 0.5),
+        math.floor((color[2] or 1) * 255 + 0.5),
+        math.floor((color[3] or 1) * 255 + 0.5)
+    )
+end
+
+local function TintText(color, text)
+    return "|cff" .. HexFromColor(color) .. (text or "") .. "|r"
+end
+
+local function FormatSkillBreakpoints(entry)
+    -- Wowhead sometimes stores orange as 0 for recipe-taught spells; fall back
+    -- to the learn skill (Requires Profession (N) on the teaching recipe).
+    local orange = entry.orange or 0
+    if orange <= 0 then
+        orange = entry.skill or 0
+        if orange <= 0 and (entry.yellow or 0) > 0 then
+            orange = 1
+        end
+    end
+    return string.format(
+        "%s%d|r/%s%d|r/%s%d|r/%s%d|r",
+        SKILL_ORANGE, orange,
+        SKILL_YELLOW, entry.yellow or 0,
+        SKILL_GREEN, entry.green or 0,
+        SKILL_GRAY, entry.gray or 0
+    )
+end
+
+-- Learn skill lives on section headers; rows show source / breakpoints / status.
+local function FormatSubtext(entry, status, subColor)
     local parts = {}
-    parts[#parts + 1] = "Skill " .. tostring(entry.skill or 0)
     if entry.trainer then
-        parts[#parts + 1] = "Trainer"
+        parts[#parts + 1] = TintText(subColor, "Trainer")
     else
-        parts[#parts + 1] = "Recipe"
+        parts[#parts + 1] = TintText(subColor, "Recipe")
     end
     if entry.orange and entry.gray and entry.gray > 0 then
-        parts[#parts + 1] = string.format(
-            "O/Y/G/Gray %d/%d/%d/%d",
-            entry.orange or 0,
-            entry.yellow or 0,
-            entry.green or 0,
-            entry.gray or 0
-        )
+        parts[#parts + 1] = FormatSkillBreakpoints(entry)
     end
     if status == "known" then
-        parts[#parts + 1] = "Known"
+        parts[#parts + 1] = TintText(subColor, "Known")
     elseif status == "available" then
-        parts[#parts + 1] = "Available"
+        parts[#parts + 1] = TintText(subColor, "Available")
     elseif status == "locked" then
-        parts[#parts + 1] = "Locked"
+        parts[#parts + 1] = TintText(subColor, "Locked")
     end
-    return table.concat(parts, "  ·  ")
+    if #parts == 0 then
+        return ""
+    end
+    return table.concat(parts, TintText(subColor, "  -  "))
+end
+
+local function BuildSkillGroupedList(recipes)
+    local list = {}
+    local lastSkill = nil
+    for _, entry in ipairs(recipes) do
+        local skill = entry.skill or 0
+        if skill ~= lastSkill then
+            list[#list + 1] = { kind = "header", skill = skill }
+            lastSkill = skill
+        end
+        list[#list + 1] = { kind = "recipe", entry = entry }
+    end
+    return list
 end
 
 local function GetPlayerProfessionSkill(key)
@@ -171,6 +221,12 @@ local function AcquireRow(index)
     row.sub:SetJustifyH("LEFT")
     row.sub:SetWordWrap(false)
 
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row:SetScript("OnClick", function(self)
+        if self.spellID then
+            ns.TryInsertSpellChatLink(self.spellID, self.displayName)
+        end
+    end)
     row:SetScript("OnEnter", function(self)
         if not self.spellID then
             return
@@ -185,6 +241,8 @@ local function AcquireRow(index)
             GameTooltip:AddLine(" ")
             GameTooltip:AddLine(self.statusText, 0.9, 0.85, 0.7)
         end
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Shift-click to link in chat", 0.65, 0.65, 0.65)
         GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function()
@@ -198,6 +256,77 @@ end
 local function HideUnusedRows(fromIndex)
     for i = fromIndex, #rowPool do
         rowPool[i]:Hide()
+    end
+end
+
+local function ConfigureHeaderRow(row, skill)
+    row.kind = "header"
+    row.spellID = nil
+    row.displayName = nil
+    row.statusText = nil
+    row:SetHeight(HEADER_HEIGHT)
+    row:EnableMouse(false)
+    row.iconBorder:Hide()
+    row.icon:Hide()
+    row.sub:Hide()
+    SafeSetText(row.sub, "")
+    row.name:ClearAllPoints()
+    row.name:SetPoint("LEFT", row, "LEFT", 6, 0)
+    row.name:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    SafeSetText(row.name, "Skill " .. tostring(skill or 0))
+    row.name:SetTextColor(COLOR_LABEL[1], COLOR_LABEL[2], COLOR_LABEL[3])
+    local hl = row:GetHighlightTexture()
+    if hl then
+        hl:SetAlpha(0)
+    end
+end
+
+local function ConfigureRecipeRow(row, entry)
+    row.kind = "recipe"
+    row:SetHeight(ROW_HEIGHT)
+    row:EnableMouse(true)
+    row.iconBorder:Show()
+    row.icon:Show()
+    row.sub:Show()
+    row.name:ClearAllPoints()
+    row.name:SetPoint("TOPLEFT", row.iconBorder, "TOPRIGHT", 6, -4)
+    row.name:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+
+    local name, iconID = GetSpellDisplay(entry.spellID, entry.name)
+    local status, nameColor, subColor = GetRowStatus(entry)
+
+    row.spellID = entry.spellID
+    row.displayName = name
+    row.icon:SetTexture(iconID)
+    SafeSetText(row.name, name)
+    SafeSetText(row.sub, FormatSubtext(entry, status, subColor))
+    row.name:SetTextColor(nameColor[1], nameColor[2], nameColor[3])
+    -- Subtext embeds its own |c colors (incl. O/Y/G/Gray breakpoints).
+    row.sub:SetTextColor(1, 1, 1)
+
+    row:SetAlpha(1)
+    if status == "known" then
+        row.statusText = "Already known"
+        row.icon:SetDesaturated(true)
+        row.icon:SetVertexColor(0.85, 0.85, 0.85)
+    elseif status == "locked" then
+        row.statusText = "Requires skill " .. tostring(entry.skill)
+        row.icon:SetDesaturated(false)
+        row.icon:SetVertexColor(1, 1, 1)
+    elseif status == "available" then
+        row.statusText = "Available to learn"
+        row.icon:SetDesaturated(false)
+        row.icon:SetVertexColor(1, 1, 1)
+    else
+        row.statusText = nil
+        row.icon:SetDesaturated(false)
+        row.icon:SetVertexColor(1, 1, 1)
+    end
+
+    local hl = row:GetHighlightTexture()
+    if hl then
+        hl:SetAlpha(0.25)
+        hl:SetVertexColor(0.6, 0.45, 0.2)
     end
 end
 
@@ -273,52 +402,34 @@ function ns.RefreshProfessionList()
         profFrame.hideKnownCheck:SetChecked(IsHideKnownEnabled())
     end
 
+    local list = BuildSkillGroupedList(recipes)
     local y = -4
-    for i, entry in ipairs(recipes) do
+    local totalHeight = 8
+    for i, item in ipairs(list) do
         local row = AcquireRow(i)
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, y)
         row:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", 0, y)
 
-        local name, iconID = GetSpellDisplay(entry.spellID, entry.name)
-        local status, nameColor, subColor = GetRowStatus(entry)
-
-        row.spellID = entry.spellID
-        row.displayName = name
-        row.icon:SetTexture(iconID)
-        SafeSetText(row.name, name)
-        SafeSetText(row.sub, FormatSubtext(entry, status))
-        row.name:SetTextColor(nameColor[1], nameColor[2], nameColor[3])
-        row.sub:SetTextColor(subColor[1], subColor[2], subColor[3])
-
-        row:SetAlpha(1)
-        if status == "known" then
-            row.statusText = "Already known"
-            row.icon:SetDesaturated(true)
-            row.icon:SetVertexColor(0.85, 0.85, 0.85)
-        elseif status == "locked" then
-            row.statusText = "Requires skill " .. tostring(entry.skill)
-            row.icon:SetDesaturated(false)
-            row.icon:SetVertexColor(1, 1, 1)
-        elseif status == "available" then
-            row.statusText = "Available to learn"
-            row.icon:SetDesaturated(false)
-            row.icon:SetVertexColor(1, 1, 1)
+        local rowHeight
+        if item.kind == "header" then
+            ConfigureHeaderRow(row, item.skill)
+            rowHeight = HEADER_HEIGHT
         else
-            row.statusText = nil
-            row.icon:SetDesaturated(false)
-            row.icon:SetVertexColor(1, 1, 1)
+            ConfigureRecipeRow(row, item.entry)
+            rowHeight = ROW_HEIGHT
         end
 
         row:Show()
-        y = y - ROW_HEIGHT
+        y = y - rowHeight
+        totalHeight = totalHeight + rowHeight
     end
 
-    HideUnusedRows(#recipes + 1)
-    scrollChild:SetHeight(math.max(1, #recipes * ROW_HEIGHT + 8))
+    HideUnusedRows(#list + 1)
+    scrollChild:SetHeight(math.max(1, totalHeight))
 
     local parts = {
-        string.format("%s — %d recipes", ns.GetProfessionDisplayName(key), #recipes),
+        string.format("%s - %d recipes", ns.GetProfessionDisplayName(key), #recipes),
     }
     if hiddenKnown > 0 then
         parts[#parts + 1] = string.format("%d known hidden", hiddenKnown)
@@ -435,7 +546,7 @@ function ns.CreateProfessionFrame()
     profFrame:SetClampedToScreen(true)
     profFrame:Hide()
 
-    ApplyTitle(profFrame, "SkillGuide Forever — Professions")
+    ApplyTitle(profFrame, "SkillGuide Forever - Professions")
 
     if ButtonFrameTemplate_HideButtonBar then
         ButtonFrameTemplate_HideButtonBar(profFrame)
@@ -477,23 +588,21 @@ function ns.CreateProfessionFrame()
     local inset = GetInset(profFrame)
     StyleContentInset(inset)
 
+    -- Clear the large ButtonFrame portrait that overlaps the top-left inset.
+    local TOOLBAR_LEFT = 56
     local toolbar = CreateFrame("Frame", nil, profFrame)
     toolbar:SetHeight(72)
     if inset then
-        toolbar:SetPoint("TOPLEFT", inset, "TOPLEFT", 8, -4)
+        toolbar:SetPoint("TOPLEFT", inset, "TOPLEFT", TOOLBAR_LEFT, -4)
         toolbar:SetPoint("TOPRIGHT", inset, "TOPRIGHT", -8, -4)
     else
-        toolbar:SetPoint("TOPLEFT", 12, -60)
+        toolbar:SetPoint("TOPLEFT", TOOLBAR_LEFT + 4, -60)
         toolbar:SetPoint("TOPRIGHT", -12, -60)
     end
 
-    local profLabel = toolbar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    profLabel:SetPoint("TOPLEFT", 0, -2)
-    profLabel:SetText("Profession")
-    profLabel:SetTextColor(COLOR_LABEL[1], COLOR_LABEL[2], COLOR_LABEL[3])
-
     local dropdown = CreateFrame("Frame", "SkillGuideForeverProfessionDropdown", toolbar, "UIDropDownMenuTemplate")
-    dropdown:SetPoint("LEFT", profLabel, "RIGHT", -8, -2)
+    -- UIDropDownMenuTemplate has empty left padding; pull slightly left within the cleared margin.
+    dropdown:SetPoint("TOPLEFT", toolbar, "TOPLEFT", -16, -4)
     profFrame.professionDropdown = dropdown
     InitProfessionDropdown(dropdown)
 

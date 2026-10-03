@@ -1,7 +1,8 @@
 ﻿local addonName, ns = ...
 
--- Spellbook-like row: icon + name + subtext (rank / train level)
+-- Spellbook-like row: icon + name + subtext (rank / status)
 local ROW_HEIGHT = 42
+local HEADER_HEIGHT = 22
 local FRAME_WIDTH = 384
 local FRAME_HEIGHT = 512
 local LIST_INSET = 12
@@ -78,16 +79,15 @@ local function GetRowStatus(entry, viewingOwnClass)
     return "available", COLOR_AVAILABLE, COLOR_AVAILABLE_SUB
 end
 
+-- Train level lives on section headers; rows only show rank / talent / status.
 local function FormatSubtext(entry, status)
     local parts = {}
     if entry.rank and entry.rank > 0 then
         parts[#parts + 1] = "Rank " .. entry.rank
     end
-    local levelBit = "Train at level " .. tostring(entry.level)
     if entry.talent then
-        levelBit = levelBit .. " (talent)"
+        parts[#parts + 1] = "Talent"
     end
-    parts[#parts + 1] = levelBit
     if status == "known" then
         parts[#parts + 1] = "Known"
     elseif status == "available" then
@@ -95,7 +95,24 @@ local function FormatSubtext(entry, status)
     elseif status == "locked" then
         parts[#parts + 1] = "Locked"
     end
-    return table.concat(parts, "  Â·  ")
+    if #parts == 0 then
+        return ""
+    end
+    return table.concat(parts, "  -  ")
+end
+
+local function BuildLevelGroupedList(skills)
+    local list = {}
+    local lastLevel = nil
+    for _, entry in ipairs(skills) do
+        local level = entry.level or 0
+        if level ~= lastLevel then
+            list[#list + 1] = { kind = "header", level = level }
+            lastLevel = level
+        end
+        list[#list + 1] = { kind = "skill", entry = entry }
+    end
+    return list
 end
 
 local function AcquireRow(index)
@@ -135,6 +152,12 @@ local function AcquireRow(index)
     row.sub:SetJustifyH("LEFT")
     row.sub:SetWordWrap(false)
 
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row:SetScript("OnClick", function(self)
+        if self.spellID then
+            ns.TryInsertSpellChatLink(self.spellID, self.displayName)
+        end
+    end)
     row:SetScript("OnEnter", function(self)
         if not self.spellID then
             return
@@ -149,6 +172,8 @@ local function AcquireRow(index)
             GameTooltip:AddLine(" ")
             GameTooltip:AddLine(self.statusText, 0.9, 0.85, 0.7)
         end
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Shift-click to link in chat", 0.65, 0.65, 0.65)
         GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function()
@@ -162,6 +187,76 @@ end
 local function HideUnusedRows(fromIndex)
     for i = fromIndex, #rowPool do
         rowPool[i]:Hide()
+    end
+end
+
+local function ConfigureHeaderRow(row, level)
+    row.kind = "header"
+    row.spellID = nil
+    row.displayName = nil
+    row.statusText = nil
+    row:SetHeight(HEADER_HEIGHT)
+    row:EnableMouse(false)
+    row.iconBorder:Hide()
+    row.icon:Hide()
+    row.sub:Hide()
+    SafeSetText(row.sub, "")
+    row.name:ClearAllPoints()
+    row.name:SetPoint("LEFT", row, "LEFT", 6, 0)
+    row.name:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    SafeSetText(row.name, "Level " .. tostring(level or 0))
+    row.name:SetTextColor(COLOR_LABEL[1], COLOR_LABEL[2], COLOR_LABEL[3])
+    local hl = row:GetHighlightTexture()
+    if hl then
+        hl:SetAlpha(0)
+    end
+end
+
+local function ConfigureSkillRow(row, entry, viewingOwnClass)
+    row.kind = "skill"
+    row:SetHeight(ROW_HEIGHT)
+    row:EnableMouse(true)
+    row.iconBorder:Show()
+    row.icon:Show()
+    row.sub:Show()
+    row.name:ClearAllPoints()
+    row.name:SetPoint("TOPLEFT", row.iconBorder, "TOPRIGHT", 6, -4)
+    row.name:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+
+    local name, iconID = GetSpellDisplay(entry.spellID, entry.name)
+    local status, nameColor, subColor = GetRowStatus(entry, viewingOwnClass)
+
+    row.spellID = entry.spellID
+    row.displayName = name
+    row.icon:SetTexture(iconID)
+    SafeSetText(row.name, name)
+    SafeSetText(row.sub, FormatSubtext(entry, status))
+    row.name:SetTextColor(nameColor[1], nameColor[2], nameColor[3])
+    row.sub:SetTextColor(subColor[1], subColor[2], subColor[3])
+
+    row:SetAlpha(1)
+    if status == "known" then
+        row.statusText = "Already known"
+        row.icon:SetDesaturated(true)
+        row.icon:SetVertexColor(0.85, 0.85, 0.85)
+    elseif status == "locked" then
+        row.statusText = "Requires level " .. tostring(entry.level)
+        row.icon:SetDesaturated(false)
+        row.icon:SetVertexColor(1, 1, 1)
+    elseif status == "available" then
+        row.statusText = "Available to train"
+        row.icon:SetDesaturated(false)
+        row.icon:SetVertexColor(1, 1, 1)
+    else
+        row.statusText = nil
+        row.icon:SetDesaturated(false)
+        row.icon:SetVertexColor(1, 1, 1)
+    end
+
+    local hl = row:GetHighlightTexture()
+    if hl then
+        hl:SetAlpha(0.25)
+        hl:SetVertexColor(0.6, 0.45, 0.2)
     end
 end
 
@@ -273,53 +368,34 @@ function ns.RefreshSkillList()
         end
     end
 
+    local list = BuildLevelGroupedList(skills)
     local y = -4
-    for i, entry in ipairs(skills) do
+    local totalHeight = 8
+    for i, item in ipairs(list) do
         local row = AcquireRow(i)
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, y)
         row:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", 0, y)
 
-        local name, iconID = GetSpellDisplay(entry.spellID, entry.name)
-        local status, nameColor, subColor = GetRowStatus(entry, viewingOwnClass)
-
-        row.spellID = entry.spellID
-        row.displayName = name
-        row.icon:SetTexture(iconID)
-        SafeSetText(row.name, name)
-        SafeSetText(row.sub, FormatSubtext(entry, status))
-
-        row.name:SetTextColor(nameColor[1], nameColor[2], nameColor[3])
-        row.sub:SetTextColor(subColor[1], subColor[2], subColor[3])
-
-        row:SetAlpha(1)
-        if status == "known" then
-            row.statusText = "Already known"
-            row.icon:SetDesaturated(true)
-            row.icon:SetVertexColor(0.85, 0.85, 0.85)
-        elseif status == "locked" then
-            row.statusText = "Requires level " .. tostring(entry.level)
-            row.icon:SetDesaturated(false)
-            row.icon:SetVertexColor(1, 1, 1)
-        elseif status == "available" then
-            row.statusText = "Available to train"
-            row.icon:SetDesaturated(false)
-            row.icon:SetVertexColor(1, 1, 1)
+        local rowHeight
+        if item.kind == "header" then
+            ConfigureHeaderRow(row, item.level)
+            rowHeight = HEADER_HEIGHT
         else
-            row.statusText = nil
-            row.icon:SetDesaturated(false)
-            row.icon:SetVertexColor(1, 1, 1)
+            ConfigureSkillRow(row, item.entry, viewingOwnClass)
+            rowHeight = ROW_HEIGHT
         end
 
         row:Show()
-        y = y - ROW_HEIGHT
+        y = y - rowHeight
+        totalHeight = totalHeight + rowHeight
     end
 
-    HideUnusedRows(#skills + 1)
-    scrollChild:SetHeight(math.max(1, #skills * ROW_HEIGHT + 8))
+    HideUnusedRows(#list + 1)
+    scrollChild:SetHeight(math.max(1, totalHeight))
 
     local parts = {
-        string.format("%s â€” %d skills", ns.GetClassDisplayName(classFile), #skills),
+        string.format("%s - %d skills", ns.GetClassDisplayName(classFile), #skills),
     }
     if hiddenKnown > 0 then
         parts[#parts + 1] = string.format("%d known hidden", hiddenKnown)
@@ -487,13 +563,15 @@ function ns.CreateMainFrame()
     StyleContentInset(inset)
 
     -- Toolbar: class, hide known, search, count
+    -- Clear the large ButtonFrame portrait that overlaps the top-left inset.
+    local TOOLBAR_LEFT = 56
     local toolbar = CreateFrame("Frame", nil, mainFrame)
     toolbar:SetHeight(72)
     if inset then
-        toolbar:SetPoint("TOPLEFT", inset, "TOPLEFT", 8, -4)
+        toolbar:SetPoint("TOPLEFT", inset, "TOPLEFT", TOOLBAR_LEFT, -4)
         toolbar:SetPoint("TOPRIGHT", inset, "TOPRIGHT", -8, -4)
     else
-        toolbar:SetPoint("TOPLEFT", 12, -60)
+        toolbar:SetPoint("TOPLEFT", TOOLBAR_LEFT + 4, -60)
         toolbar:SetPoint("TOPRIGHT", -12, -60)
     end
 
