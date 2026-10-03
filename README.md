@@ -1,68 +1,46 @@
 # SkillGuide Forever
 
-A **WoW Forever** addon that lists class trainer skills, ranks, and the level required to train them. Defaults to your current class; use the dropdown to browse any class.
+**What can I train next — and what am I still missing?**
 
-![Interface](https://img.shields.io/badge/Interface-16001-blue) ![License](https://img.shields.io/badge/License-MIT-green)
+SkillGuide Forever is a lightweight WoW Forever addon that shows class trainer skills and profession recipes in a clean Blizzard-style window. See ranks, the level (or skill) you need, and whether something is ready to learn, already known, or still locked.
 
-## Features
+Made for **WoW Forever** — not Classic Era leftovers.
 
-- Class dropdown for all 9 classes
-- Icon, name, rank, and train level for each skill
-- Own-class cues: available / known / locked
-- **Hide known** toggle
-- Search by name, rank, or level
-- Forever skill seed (not Classic Era tables)
+## Why grab it
+
+- Plan your next trainer visit without guessing
+- Peek at other classes when you’re theorycrafting an alt
+- Check profession recipes: when you can learn them, trainer vs recipe, skill-up colors
+- Hide stuff you already know so the list stays useful while leveling
+- Search when you only remember half a spell name
+
+## Commands
+
+| Type this | What opens |
+|-----------|------------|
+| `/sg` | Class skills |
+| `/pg` | Profession recipes |
+
+That’s it. Pick a class or profession from the dropdown, optionally turn on **Hide known**, and go.
+
+**Colors on your character:** green = you can learn it now · grey = already known · red = not yet (level or skill too low).
 
 ## Install
 
-### From a zip / CurseForge / Wago
+Install with CurseForge (or your usual addon client), then restart the game or type `/reload`.
 
-Install normally with your addon client, or unpack so you have:
+[Get it on CurseForge](https://www.curseforge.com/wow/addons/skillguideforever)
 
-`World of Warcraft\_classic_beta_\Interface\AddOns\SkillGuideForever\SkillGuideForever.toc`
+Manual install: put the `SkillGuideForever` folder in  
+`World of Warcraft\_classic_beta_\Interface\AddOns\`  
+so that `SkillGuideForever.toc` is inside that folder.
 
-Restart the client (or `/reload`).
+## Notes
 
-### From this repo (developers)
-
-```powershell
-.\update-data.ps1 -Deploy
-```
-
-## Usage
-
-| Command | Action |
-|---------|--------|
-| `/skillguideforever` or `/sgf` | Toggle the window |
-
-- **Class** dropdown — browse another class
-- **Hide known** — hide skills you already learned (your class only)
-- Search box — filter the list
-
-Colors on your own class: green = can train, grey = known, red = locked.
-
-## Updating / releasing (authors)
-
-After a Forever patch, ship a new CurseForge build in one command:
-
-```powershell
-.\release.ps1 -UpdateData -Bump patch -Push
-```
-
-That refreshes Wowhead skill data, bumps the version, tags `vX.Y.Z`, and lets GitHub Actions upload to CurseForge.
-
-One-time CurseForge automation setup (project ID + API token) is in [RELEASE.md](RELEASE.md).
-
-| Script | Purpose |
-|--------|---------|
-| `.\release.ps1 -UpdateData -Bump patch -Push` | Full automated release |
-| `.\update-data.ps1 -Deploy` | Refresh data into local AddOns only |
-| `.\package.ps1 -Version 0.1.1` | Manual zip (no upload) |
-
-See also [PUBLISHING.md](PUBLISHING.md).
+- Built for **WoW Forever**
+- Pet abilities / warlock grimoires are not listed
+- Gathering professions may show fewer entries than crafts (that’s the data, not a broken filter)
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-Skill seed data is generated from [Wowhead Forever ability listviews](https://www.wowhead.com/forever/spells/abilities/). Re-run `update-data.ps1` to refresh.

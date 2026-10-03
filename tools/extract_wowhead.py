@@ -1,10 +1,11 @@
 ﻿"""
-Fetch WoW Forever class trainer skills from Wowhead and write Core/Data.lua.
+Fetch WoW Forever class + profession data from Wowhead and write Core Lua seeds.
 
 Examples:
   python tools/extract_wowhead.py
   python tools/extract_wowhead.py --deploy
   python tools/extract_wowhead.py --class hunter --deploy
+  python tools/extract_wowhead.py --professions-only --deploy
   python tools/extract_wowhead.py --from-cache
 """
 
@@ -33,9 +34,26 @@ CLASSES = [
     "druid",
 ]
 
+# (wowhead slug, data key, path prefix)
+PROFESSIONS = [
+    ("alchemy", "ALCHEMY", "professions"),
+    ("blacksmithing", "BLACKSMITHING", "professions"),
+    ("enchanting", "ENCHANTING", "professions"),
+    ("engineering", "ENGINEERING", "professions"),
+    ("herbalism", "HERBALISM", "professions"),
+    ("leatherworking", "LEATHERWORKING", "professions"),
+    ("mining", "MINING", "professions"),
+    ("skinning", "SKINNING", "professions"),
+    ("tailoring", "TAILORING", "professions"),
+    ("cooking", "COOKING", "secondary-skills"),
+    ("first-aid", "FIRST_AID", "secondary-skills"),
+    ("fishing", "FISHING", "secondary-skills"),
+]
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT_DIR = pathlib.Path(__file__).resolve().parent / "_cache"
 DATA_LUA = ROOT / "Core" / "Data.lua"
+PROFESSION_DATA_LUA = ROOT / "Core" / "ProfessionData.lua"
 DEFAULT_ADDONS = pathlib.Path(
     r"C:\Program Files\World of Warcraft\_classic_beta_\Interface\AddOns\SkillGuideForever"
 )
@@ -279,33 +297,171 @@ def write_data_lua(all_data: dict, generated_at: str):
     DATA_LUA.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def extract_profession(slug: str, key: str, prefix: str, *, from_cache: bool = False):
+    cache_html = OUT_DIR / ("wh_prof_%s.html" % slug.replace("-", "_"))
+    url = "https://www.wowhead.com/forever/spells/%s/%s" % (prefix, slug)
+
+    if from_cache:
+        if not cache_html.exists():
+            raise FileNotFoundError("No cache for profession %s (%s)" % (slug, cache_html))
+        print("  cache  %s" % slug)
+        html = cache_html.read_text(encoding="utf-8")
+    else:
+        print("  fetch  %s" % url)
+        html = fetch(url)
+        cache_html.write_text(html, encoding="utf-8")
+
+    items = parse_listviewspells(html)
+    rows = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        sid = item.get("id")
+        if not sid:
+            continue
+        learned = item.get("learnedat")
+        if learned is None:
+            continue
+        try:
+            skill = int(learned)
+        except (TypeError, ValueError):
+            continue
+        # Wowhead uses 9999 for the profession skill header / unavailable rows.
+        if skill >= 9000:
+            continue
+        name = item.get("displayName") or item.get("name") or ""
+        if not name:
+            continue
+        # Skip the bare profession skill entry ("Alchemy", "Cooking", ...).
+        if name.replace(" ", "-").lower() == slug or name.lower() == slug.replace("-", " "):
+            if not item.get("colors"):
+                continue
+
+        sources = item.get("source") or []
+        if not isinstance(sources, list):
+            sources = [sources]
+        trainer = (6 in sources) or (item.get("trainingcost") is not None)
+        colors = item.get("colors") or []
+        orange = int(colors[0]) if len(colors) > 0 else skill
+        yellow = int(colors[1]) if len(colors) > 1 else skill
+        green = int(colors[2]) if len(colors) > 2 else skill
+        gray = int(colors[3]) if len(colors) > 3 else skill
+
+        rows.append(
+            {
+                "spellID": int(sid),
+                "skill": skill,
+                "name": name,
+                "trainer": bool(trainer),
+                "orange": orange,
+                "yellow": yellow,
+                "green": green,
+                "gray": gray,
+            }
+        )
+
+    by_id = {}
+    for r in rows:
+        prev = by_id.get(r["spellID"])
+        if not prev or r["skill"] < prev["skill"]:
+            by_id[r["spellID"]] = r
+    rows = sorted(by_id.values(), key=lambda r: (r["skill"], r["name"].lower(), r["spellID"]))
+    (OUT_DIR / ("wh_prof_%s.json" % slug.replace("-", "_"))).write_text(
+        json.dumps(rows, indent=2), encoding="utf-8"
+    )
+    print(
+        "         %s: %d recipes (%d trainer)"
+        % (slug, len(rows), sum(1 for r in rows if r["trainer"]))
+    )
+    return rows
+
+
+def write_profession_data_lua(all_data: dict, generated_at: str):
+    lines = [
+        "-- Forever profession recipe seed for SkillGuideForever.",
+        "-- Source: Wowhead Forever profession / secondary-skill listviews",
+        "--   https://www.wowhead.com/forever/spells/professions/",
+        "--   https://www.wowhead.com/forever/spells/secondary-skills/",
+        "-- Generated: %s" % generated_at,
+        "-- Update: python tools/extract_wowhead.py   or   .\\update-data.ps1",
+        "local addonName, ns = ...",
+        "",
+        "ns.ProfessionData = {",
+    ]
+    for _, key, _ in PROFESSIONS:
+        lines.append("\t%s = {" % key)
+        for s in all_data.get(key, []):
+            trainer = ", trainer = true" if s.get("trainer") else ""
+            name = (s.get("name") or "").replace("\\", "\\\\").replace('"', '\\"')
+            lines.append(
+                "\t\t{ spellID = %d, skill = %d, name = \"%s\", "
+                "orange = %d, yellow = %d, green = %d, gray = %d%s },"
+                % (
+                    s["spellID"],
+                    s["skill"],
+                    name,
+                    s["orange"],
+                    s["yellow"],
+                    s["green"],
+                    s["gray"],
+                    trainer,
+                )
+            )
+        lines.append("\t},")
+    lines.append("}")
+    lines.append("")
+    PROFESSION_DATA_LUA.parent.mkdir(parents=True, exist_ok=True)
+    PROFESSION_DATA_LUA.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def deploy_to_addons(addons_dir: pathlib.Path):
-    dest = addons_dir / "Core" / "Data.lua"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(DATA_LUA, dest)
-    print("deployed -> %s" % dest)
+    core = addons_dir / "Core"
+    core.mkdir(parents=True, exist_ok=True)
+    if DATA_LUA.exists():
+        shutil.copy2(DATA_LUA, core / "Data.lua")
+        print("deployed -> %s" % (core / "Data.lua"))
+    if PROFESSION_DATA_LUA.exists():
+        shutil.copy2(PROFESSION_DATA_LUA, core / "ProfessionData.lua")
+        print("deployed -> %s" % (core / "ProfessionData.lua"))
 
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
-        description="Update SkillGuideForever Forever skill seed from Wowhead."
+        description="Update SkillGuideForever class + profession seeds from Wowhead."
     )
     p.add_argument(
         "--class",
         dest="classes",
         action="append",
         choices=CLASSES,
-        help="Only refresh one class (repeatable). Default: all classes.",
+        help="Only refresh one class (repeatable).",
+    )
+    p.add_argument(
+        "--profession",
+        dest="professions",
+        action="append",
+        choices=[p[0] for p in PROFESSIONS],
+        help="Only refresh one profession (repeatable).",
+    )
+    p.add_argument(
+        "--classes-only",
+        action="store_true",
+        help="Refresh class skills only.",
+    )
+    p.add_argument(
+        "--professions-only",
+        action="store_true",
+        help="Refresh profession recipes only.",
     )
     p.add_argument(
         "--from-cache",
         action="store_true",
-        help="Rebuild Data.lua from tools/_cache HTML (no network).",
+        help="Rebuild Lua from tools/_cache HTML (no network).",
     )
     p.add_argument(
         "--deploy",
         action="store_true",
-        help="Copy Core/Data.lua into the WoW Forever AddOns folder.",
+        help="Copy seed Lua files into the WoW Forever AddOns folder.",
     )
     p.add_argument(
         "--addons-dir",
@@ -316,7 +472,7 @@ def parse_args(argv=None):
     p.add_argument(
         "--dry-run",
         action="store_true",
-        help="Fetch/parse and print counts only; do not write Data.lua.",
+        help="Fetch/parse and print counts only; do not write Lua.",
     )
     return p.parse_args(argv)
 
@@ -324,45 +480,87 @@ def parse_args(argv=None):
 def main(argv=None) -> int:
     args = parse_args(argv)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    selected = args.classes or CLASSES
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
+    do_classes = not args.professions_only
+    do_professions = not args.classes_only
+    if args.classes:
+        do_classes = True
+    if args.professions:
+        do_professions = True
+
     print("SkillGuideForever data update")
-    print("  mode    : %s" % ("cache" if args.from_cache else "live Wowhead"))
-    print("  classes : %s" % ", ".join(selected))
+    print("  mode         : %s" % ("cache" if args.from_cache else "live Wowhead"))
+    print("  classes      : %s" % ("yes" if do_classes else "skip"))
+    print("  professions  : %s" % ("yes" if do_professions else "skip"))
     print("")
 
-    all_data = {}
-    # Preserve non-selected classes from existing all.json when partial refresh
+    class_data = {}
+    prof_data = {}
     all_json_path = OUT_DIR / "all.json"
-    if args.classes and all_json_path.exists():
+    prof_json_path = OUT_DIR / "all_professions.json"
+
+    if do_classes and args.classes and all_json_path.exists():
         try:
-            all_data.update(json.loads(all_json_path.read_text(encoding="utf-8")))
+            class_data.update(json.loads(all_json_path.read_text(encoding="utf-8")))
+        except json.JSONDecodeError:
+            pass
+    if do_professions and args.professions and prof_json_path.exists():
+        try:
+            prof_data.update(json.loads(prof_json_path.read_text(encoding="utf-8")))
         except json.JSONDecodeError:
             pass
 
     try:
-        for c in selected:
-            all_data[c.upper()] = extract_class(c, from_cache=args.from_cache)
+        if do_classes:
+            selected = args.classes or CLASSES
+            print("Classes")
+            for c in selected:
+                class_data[c.upper()] = extract_class(c, from_cache=args.from_cache)
+            for c in CLASSES:
+                class_data.setdefault(c.upper(), [])
+
+        if do_professions:
+            selected_prof = args.professions or [p[0] for p in PROFESSIONS]
+            print("Professions")
+            for slug, key, prefix in PROFESSIONS:
+                if slug not in selected_prof:
+                    continue
+                prof_data[key] = extract_profession(
+                    slug, key, prefix, from_cache=args.from_cache
+                )
+            for _, key, _ in PROFESSIONS:
+                prof_data.setdefault(key, [])
     except (urllib.error.URLError, urllib.error.HTTPError, ValueError, OSError) as exc:
         print("ERROR: %s" % exc, file=sys.stderr)
         return 1
 
-    # Ensure every class key exists for full Data.lua writes
-    for c in CLASSES:
-        all_data.setdefault(c.upper(), [])
-
-    total = sum(len(v) for v in all_data.values())
+    class_total = sum(len(v) for v in class_data.values()) if do_classes else 0
+    prof_total = sum(len(v) for v in prof_data.values()) if do_professions else 0
     print("")
-    print("summary : %d skills across %d classes" % (total, len(CLASSES)))
+    if do_classes:
+        print("summary : %d class skills across %d classes" % (class_total, len(CLASSES)))
+    if do_professions:
+        print(
+            "summary : %d profession recipes across %d professions"
+            % (prof_total, len(PROFESSIONS))
+        )
 
     if args.dry_run:
-        print("dry-run : Data.lua not written")
+        print("dry-run : Lua files not written")
         return 0
 
-    all_json_path.write_text(json.dumps(all_data, indent=2), encoding="utf-8")
-    write_data_lua(all_data, generated_at)
-    print("wrote   : %s (%d bytes)" % (DATA_LUA, DATA_LUA.stat().st_size))
+    if do_classes:
+        all_json_path.write_text(json.dumps(class_data, indent=2), encoding="utf-8")
+        write_data_lua(class_data, generated_at)
+        print("wrote   : %s (%d bytes)" % (DATA_LUA, DATA_LUA.stat().st_size))
+    if do_professions:
+        prof_json_path.write_text(json.dumps(prof_data, indent=2), encoding="utf-8")
+        write_profession_data_lua(prof_data, generated_at)
+        print(
+            "wrote   : %s (%d bytes)"
+            % (PROFESSION_DATA_LUA, PROFESSION_DATA_LUA.stat().st_size)
+        )
 
     if args.deploy:
         if not args.addons_dir.exists():
@@ -374,7 +572,7 @@ def main(argv=None) -> int:
         deploy_to_addons(args.addons_dir)
         print("next    : /reload in-game")
     else:
-        print("next    : .\\update-data.ps1 -Deploy   (or copy Core\\Data.lua yourself)")
+        print("next    : .\\update-data.ps1 -Deploy")
 
     return 0
 

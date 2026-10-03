@@ -140,7 +140,7 @@ if ($changelog -notmatch [regex]::Escape("## $newVersion ")) {
 }
 
 if (-not $SkipCommit) {
-    git add SkillGuideForever.toc CHANGELOG.md Core/Data.lua
+    git add SkillGuideForever.toc CHANGELOG.md Core/Data.lua Core/ProfessionData.lua
     # Stage other tracked changes if present (UI fixes etc.)
     git add -u
     $status = git status --porcelain

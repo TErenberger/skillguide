@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: SkillGuide Forever
-## Notes: Browse Forever class skills and ranks with the level required to train them.
+## Notes: Browse Forever class skills and profession recipes with train/skill levels.
 ## Author: Trey
-## Version: 0.1.0
+## Version: 0.2.0
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 ## Category: Class
 ## SavedVariables: SkillGuideForeverDB
@@ -12,6 +12,9 @@
 ## X-Curse-Project-ID: 1723468
 
 Core\Data.lua
+Core\ProfessionData.lua
 Core\Class.lua
+Core\Profession.lua
 UI\MainFrame.lua
+UI\ProfessionFrame.lua
 SkillGuideForever.lua
