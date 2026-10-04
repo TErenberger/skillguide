@@ -20,10 +20,13 @@ Made for **WoW Forever** — not Classic Era leftovers.
 |-----------|------------|
 | `/sg` | Class skills |
 | `/pg` | Profession recipes |
+| `/sg config` | Options (also Esc → Options → AddOns) |
 
 That’s it. Pick a class or profession from the dropdown, optionally turn on **Hide known**, and go.
 
 Open chat, then **Shift-click** a row to paste a clickable spell/recipe link.
+
+Works with popular UI packs: turn on **Allow external skins** in options so ElvUI / AddOnSkins can restyle the windows. Skin authors can hook `SkillGuideForeverAPI`.
 
 **Colors on your character:** green = you can learn it now · grey = already known · red = not yet (level or skill too low).
 

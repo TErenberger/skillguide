@@ -452,6 +452,7 @@ local function InitClassDropdown(dropdown)
         end
     end)
     UIDropDownMenu_SetWidth(dropdown, 130)
+    dropdown.SGFMenuWidth = 130
     UIDropDownMenu_JustifyText(dropdown, "LEFT")
 end
 
@@ -564,9 +565,23 @@ function ns.CreateMainFrame()
 
     -- Toolbar: class, hide known, search, count
     -- Clear the large ButtonFrame portrait that overlaps the top-left inset.
+    -- Alt skins hide the portrait and call ns.SetPortraitClearance(frame, false).
     local TOOLBAR_LEFT = 56
+    mainFrame.SGFLayout = {
+        hasInset = inset ~= nil,
+        toolbarLeftPortrait = TOOLBAR_LEFT,
+        toolbarLeftSkinned = 8,
+        toolbarTop = -4,
+        toolbarRight = -8,
+        listInset = LIST_INSET,
+        scrollGap = -6,
+        scrollRight = -28,
+        scrollBottom = LIST_INSET,
+        dropdownUsesToolbarAnchor = false,
+    }
     local toolbar = CreateFrame("Frame", nil, mainFrame)
     toolbar:SetHeight(72)
+    mainFrame.toolbar = toolbar
     if inset then
         toolbar:SetPoint("TOPLEFT", inset, "TOPLEFT", TOOLBAR_LEFT, -4)
         toolbar:SetPoint("TOPRIGHT", inset, "TOPRIGHT", -8, -4)
@@ -658,13 +673,13 @@ function ns.CreateMainFrame()
     mainFrame.subtitle:SetTextColor(COLOR_SUB[1], COLOR_SUB[2], COLOR_SUB[3])
     SafeSetText(mainFrame.subtitle, "")
 
-    -- Scrollable skill list
+    -- Scrollable skill list (anchored under toolbar so skin clearance can shift it)
     scrollFrame = CreateFrame("ScrollFrame", "SkillGuideForeverScrollFrame", mainFrame, "UIPanelScrollFrameTemplate")
     if inset then
-        scrollFrame:SetPoint("TOPLEFT", inset, "TOPLEFT", LIST_INSET, -80)
+        scrollFrame:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", LIST_INSET - TOOLBAR_LEFT, -6)
         scrollFrame:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -28, LIST_INSET)
     else
-        scrollFrame:SetPoint("TOPLEFT", 20, -140)
+        scrollFrame:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", -36, -6)
         scrollFrame:SetPoint("BOTTOMRIGHT", -36, 20)
     end
 
@@ -685,18 +700,39 @@ function ns.CreateMainFrame()
     end
     SetSelectedClass(selected)
 
-    mainFrame:SetScript("OnShow", function()
+    mainFrame:SetScript("OnShow", function(self)
         if PlaySound and SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_OPEN then
             PlaySound(SOUNDKIT.IG_CHARACTER_INFO_OPEN)
         end
+        if ns.NotifyFrameShow then
+            ns.NotifyFrameShow("main", self)
+        end
     end)
-    mainFrame:SetScript("OnHide", function()
+    mainFrame:SetScript("OnHide", function(self)
         if PlaySound and SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_CLOSE then
             PlaySound(SOUNDKIT.IG_CHARACTER_INFO_CLOSE)
+        end
+        if ns.NotifyFrameHide then
+            ns.NotifyFrameHide("main", self)
         end
     end)
 
     tinsert(UISpecialFrames, "SkillGuideForeverFrame")
+
+    if ns.NotifyFrameCreated then
+        ns.NotifyFrameCreated("main", mainFrame, {
+            frame = mainFrame,
+            inset = GetInset(mainFrame),
+            dropdown = mainFrame.classDropdown,
+            searchBox = mainFrame.searchBox,
+            hideKnownCheck = mainFrame.hideKnownCheck,
+            scrollFrame = scrollFrame,
+            scrollChild = scrollChild,
+            subtitle = mainFrame.subtitle,
+            toolbar = mainFrame.toolbar,
+        })
+    end
+
     return mainFrame
 end
 

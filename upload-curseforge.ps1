@@ -12,7 +12,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Version = "0.3.0",
+    [string]$Version = "0.4.0",
     [string]$ApiToken = $env:CF_API_KEY,
     [ValidateSet("alpha", "beta", "release")]
     [string]$ReleaseType = "release",

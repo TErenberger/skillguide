@@ -334,6 +334,10 @@ local function IsHideKnownEnabled()
     return ns.db and ns.db.hideKnownProfession
 end
 
+local function IsHideRecipesEnabled()
+    return ns.db and ns.db.hideRecipeProfession
+end
+
 local function GetSearchQuery()
     if not profFrame then
         return ""
@@ -371,12 +375,16 @@ end
 
 local function BuildVisibleRecipes(recipes)
     local hideKnown = IsHideKnownEnabled()
+    local hideRecipes = IsHideRecipesEnabled()
     local query = GetSearchQuery()
     local visible = {}
     local hiddenKnown = 0
+    local hiddenRecipes = 0
     local hiddenSearch = 0
     for _, entry in ipairs(recipes) do
-        if hideKnown and ns.IsPlayerSpellKnown(entry.spellID) then
+        if hideRecipes and not entry.trainer then
+            hiddenRecipes = hiddenRecipes + 1
+        elseif hideKnown and ns.IsPlayerSpellKnown(entry.spellID) then
             hiddenKnown = hiddenKnown + 1
         elseif not EntryMatchesSearch(entry, query) then
             hiddenSearch = hiddenSearch + 1
@@ -384,7 +392,7 @@ local function BuildVisibleRecipes(recipes)
             visible[#visible + 1] = entry
         end
     end
-    return visible, hiddenKnown, hiddenSearch
+    return visible, hiddenKnown, hiddenRecipes, hiddenSearch
 end
 
 function ns.RefreshProfessionList()
@@ -394,12 +402,15 @@ function ns.RefreshProfessionList()
 
     local key = profFrame.selectedProfession or ns.GetDefaultProfessionKey()
     local allRecipes = ns.GetRecipesForProfession(key) or {}
-    local recipes, hiddenKnown, hiddenSearch = BuildVisibleRecipes(allRecipes)
+    local recipes = BuildVisibleRecipes(allRecipes)
 
     UpdateProfessionPortrait(key)
 
     if profFrame.hideKnownCheck then
         profFrame.hideKnownCheck:SetChecked(IsHideKnownEnabled())
+    end
+    if profFrame.hideRecipesCheck then
+        profFrame.hideRecipesCheck:SetChecked(IsHideRecipesEnabled())
     end
 
     local list = BuildSkillGroupedList(recipes)
@@ -428,22 +439,6 @@ function ns.RefreshProfessionList()
     HideUnusedRows(#list + 1)
     scrollChild:SetHeight(math.max(1, totalHeight))
 
-    local parts = {
-        string.format("%s - %d recipes", ns.GetProfessionDisplayName(key), #recipes),
-    }
-    if hiddenKnown > 0 then
-        parts[#parts + 1] = string.format("%d known hidden", hiddenKnown)
-    end
-    if hiddenSearch > 0 then
-        parts[#parts + 1] = string.format("%d filtered", hiddenSearch)
-    end
-    local subtitle = parts[1]
-    if #parts > 1 then
-        subtitle = parts[1] .. " (" .. table.concat(parts, ", ", 2) .. ")"
-    end
-    if profFrame.subtitle then
-        SafeSetText(profFrame.subtitle, subtitle)
-    end
 end
 
 function ns.OnProfessionSpellDataLoaded(spellID, success)
@@ -483,6 +478,7 @@ local function InitProfessionDropdown(dropdown)
         end
     end)
     UIDropDownMenu_SetWidth(dropdown, 150)
+    dropdown.SGFMenuWidth = 150
     UIDropDownMenu_JustifyText(dropdown, "LEFT")
 end
 
@@ -589,9 +585,26 @@ function ns.CreateProfessionFrame()
     StyleContentInset(inset)
 
     -- Clear the large ButtonFrame portrait that overlaps the top-left inset.
+    -- Layout (3 rows, no subtitle): dropdown | toggles | search
+    -- Alt skins hide the portrait and call ns.SetPortraitClearance(frame, false).
     local TOOLBAR_LEFT = 56
+    profFrame.SGFLayout = {
+        hasInset = inset ~= nil,
+        toolbarLeftPortrait = TOOLBAR_LEFT,
+        toolbarLeftSkinned = 8,
+        toolbarTop = -4,
+        toolbarRight = -8,
+        listInset = LIST_INSET,
+        scrollGap = -6,
+        scrollRight = -28,
+        scrollBottom = LIST_INSET,
+        dropdownUsesToolbarAnchor = true,
+        dropdownLeftPortrait = -16,
+        dropdownLeftSkinned = -4,
+        dropdownTop = -2,
+    }
     local toolbar = CreateFrame("Frame", nil, profFrame)
-    toolbar:SetHeight(72)
+    toolbar:SetHeight(86)
     if inset then
         toolbar:SetPoint("TOPLEFT", inset, "TOPLEFT", TOOLBAR_LEFT, -4)
         toolbar:SetPoint("TOPRIGHT", inset, "TOPRIGHT", -8, -4)
@@ -599,16 +612,42 @@ function ns.CreateProfessionFrame()
         toolbar:SetPoint("TOPLEFT", TOOLBAR_LEFT + 4, -60)
         toolbar:SetPoint("TOPRIGHT", -12, -60)
     end
+    profFrame.toolbar = toolbar
 
     local dropdown = CreateFrame("Frame", "SkillGuideForeverProfessionDropdown", toolbar, "UIDropDownMenuTemplate")
     -- UIDropDownMenuTemplate has empty left padding; pull slightly left within the cleared margin.
-    dropdown:SetPoint("TOPLEFT", toolbar, "TOPLEFT", -16, -4)
+    dropdown:SetPoint("TOPLEFT", toolbar, "TOPLEFT", -16, -2)
     profFrame.professionDropdown = dropdown
     InitProfessionDropdown(dropdown)
 
+    local hideRecipes = CreateFrame("CheckButton", "SkillGuideForeverProfHideRecipesCheck", toolbar, "UICheckButtonTemplate")
+    hideRecipes:SetSize(22, 22)
+    hideRecipes:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 4, -30)
+    hideRecipes:SetChecked(IsHideRecipesEnabled())
+    hideRecipes:SetScript("OnClick", function(self)
+        if ns.db then
+            ns.db.hideRecipeProfession = self:GetChecked() and true or false
+        end
+        ns.RefreshProfessionList()
+    end)
+    hideRecipes:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:SetText("Hide recipes")
+        GameTooltip:AddLine("Hide skills learned from recipe items. Trainer skills stay visible.", 1, 0.82, 0, true)
+        GameTooltip:Show()
+    end)
+    hideRecipes:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    local hideRecipesLabel = toolbar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    hideRecipesLabel:SetPoint("LEFT", hideRecipes, "RIGHT", 2, 0)
+    hideRecipesLabel:SetText("Hide recipes")
+    hideRecipesLabel:SetTextColor(COLOR_SUB[1], COLOR_SUB[2], COLOR_SUB[3])
+    profFrame.hideRecipesCheck = hideRecipes
+
     local hideKnown = CreateFrame("CheckButton", "SkillGuideForeverProfHideKnownCheck", toolbar, "UICheckButtonTemplate")
-    hideKnown:SetSize(24, 24)
-    hideKnown:SetPoint("TOPRIGHT", 4, 2)
+    hideKnown:SetSize(22, 22)
+    hideKnown:SetPoint("LEFT", hideRecipesLabel, "RIGHT", 14, 0)
     hideKnown:SetChecked(IsHideKnownEnabled())
     hideKnown:SetScript("OnClick", function(self)
         if ns.db then
@@ -626,7 +665,7 @@ function ns.CreateProfessionFrame()
         GameTooltip:Hide()
     end)
     local hideKnownLabel = toolbar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hideKnownLabel:SetPoint("RIGHT", hideKnown, "LEFT", -2, 0)
+    hideKnownLabel:SetPoint("LEFT", hideKnown, "RIGHT", 2, 0)
     hideKnownLabel:SetText("Hide known")
     hideKnownLabel:SetTextColor(COLOR_SUB[1], COLOR_SUB[2], COLOR_SUB[3])
     profFrame.hideKnownCheck = hideKnown
@@ -640,8 +679,8 @@ function ns.CreateProfessionFrame()
         search:SetTextInsets(8, 8, 0, 0)
     end
     search:SetHeight(22)
-    search:SetPoint("TOPLEFT", 4, -28)
-    search:SetPoint("TOPRIGHT", -4, -28)
+    search:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 4, -56)
+    search:SetPoint("TOPRIGHT", toolbar, "TOPRIGHT", -4, -56)
     search:SetAutoFocus(false)
     if search.Instructions then
         search.Instructions:SetText("Search recipes")
@@ -671,19 +710,12 @@ function ns.CreateProfessionFrame()
     end)
     profFrame.searchBox = search
 
-    profFrame.subtitle = toolbar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    profFrame.subtitle:SetPoint("BOTTOMLEFT", 2, 2)
-    profFrame.subtitle:SetPoint("BOTTOMRIGHT", -2, 2)
-    profFrame.subtitle:SetJustifyH("LEFT")
-    profFrame.subtitle:SetTextColor(COLOR_SUB[1], COLOR_SUB[2], COLOR_SUB[3])
-    SafeSetText(profFrame.subtitle, "")
-
     scrollFrame = CreateFrame("ScrollFrame", "SkillGuideForeverProfessionScrollFrame", profFrame, "UIPanelScrollFrameTemplate")
     if inset then
-        scrollFrame:SetPoint("TOPLEFT", inset, "TOPLEFT", LIST_INSET, -80)
+        scrollFrame:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", LIST_INSET - TOOLBAR_LEFT, -6)
         scrollFrame:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -28, LIST_INSET)
     else
-        scrollFrame:SetPoint("TOPLEFT", 20, -140)
+        scrollFrame:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", -36, -6)
         scrollFrame:SetPoint("BOTTOMRIGHT", -36, 20)
     end
 
@@ -698,18 +730,39 @@ function ns.CreateProfessionFrame()
     end
     SetSelectedProfession(selected)
 
-    profFrame:SetScript("OnShow", function()
+    profFrame:SetScript("OnShow", function(self)
         if PlaySound and SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_OPEN then
             PlaySound(SOUNDKIT.IG_CHARACTER_INFO_OPEN)
         end
+        if ns.NotifyFrameShow then
+            ns.NotifyFrameShow("profession", self)
+        end
     end)
-    profFrame:SetScript("OnHide", function()
+    profFrame:SetScript("OnHide", function(self)
         if PlaySound and SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_CLOSE then
             PlaySound(SOUNDKIT.IG_CHARACTER_INFO_CLOSE)
+        end
+        if ns.NotifyFrameHide then
+            ns.NotifyFrameHide("profession", self)
         end
     end)
 
     tinsert(UISpecialFrames, "SkillGuideForeverProfessionFrame")
+
+    if ns.NotifyFrameCreated then
+        ns.NotifyFrameCreated("profession", profFrame, {
+            frame = profFrame,
+            inset = GetInset(profFrame),
+            dropdown = profFrame.professionDropdown,
+            searchBox = profFrame.searchBox,
+            hideKnownCheck = profFrame.hideKnownCheck,
+            hideRecipesCheck = profFrame.hideRecipesCheck,
+            scrollFrame = scrollFrame,
+            scrollChild = scrollChild,
+            toolbar = profFrame.toolbar,
+        })
+    end
+
     return profFrame
 end
 

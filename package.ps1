@@ -8,7 +8,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Version = "0.3.0",
+    [string]$Version = "0.4.0",
     [string]$OutDir = ""
 )
 
@@ -35,8 +35,12 @@ $files = @(
     "Core\ProfessionData.lua",
     "Core\Class.lua",
     "Core\Profession.lua",
+    "Core\Integration.lua",
     "UI\MainFrame.lua",
-    "UI\ProfessionFrame.lua"
+    "UI\ProfessionFrame.lua",
+    "UI\Skins.lua",
+    "UI\Options.lua",
+    "docs\INTEGRATION.md"
 )
 
 foreach ($rel in $files) {

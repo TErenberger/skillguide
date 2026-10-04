@@ -33,10 +33,16 @@ function eventFrame:ADDON_LOADED(loaded)
     if ns.db.hideKnownProfession == nil then
         ns.db.hideKnownProfession = false
     end
+    if ns.db.hideRecipeProfession == nil then
+        ns.db.hideRecipeProfession = false
+    end
     if ns.db.professionPoint == nil then
         ns.db.professionPoint = "CENTER"
         ns.db.professionX = 40
         ns.db.professionY = 0
+    end
+    if ns.EnsureIntegrationDefaults then
+        ns.EnsureIntegrationDefaults()
     end
     self:UnregisterEvent("ADDON_LOADED")
 end
@@ -47,6 +53,9 @@ function eventFrame:PLAYER_LOGIN()
     end
     if not ns.db.selectedProfession then
         ns.db.selectedProfession = ns.GetDefaultProfessionKey and ns.GetDefaultProfessionKey() or "ALCHEMY"
+    end
+    if ns.InitOptions then
+        ns.InitOptions()
     end
     if ns.CreateMainFrame then
         ns.CreateMainFrame()
@@ -96,17 +105,33 @@ eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
 eventFrame:RegisterEvent("SPELLS_CHANGED")
 eventFrame:RegisterEvent("SKILL_LINES_CHANGED")
 
-SLASH_SKILLGUIDEFOREVER1 = "/sg"
-SLASH_SKILLGUIDEFOREVER2 = "/skillguideforever"
-SlashCmdList.SKILLGUIDEFOREVER = function()
+local function HandleClassSlash(msg)
+    msg = type(msg) == "string" and strtrim(string.lower(msg)) or ""
+    if msg == "config" or msg == "options" or msg == "opt" then
+        if ns.OpenOptions then
+            ns.OpenOptions()
+        end
+        return
+    end
     if ns.ToggleMainFrame then
         ns.ToggleMainFrame()
     end
 end
 
+SLASH_SKILLGUIDEFOREVER1 = "/sg"
+SLASH_SKILLGUIDEFOREVER2 = "/skillguideforever"
+SlashCmdList.SKILLGUIDEFOREVER = HandleClassSlash
+
 SLASH_SKILLGUIDEFOREVERPROF1 = "/pg"
 SLASH_SKILLGUIDEFOREVERPROF2 = "/skillguideprofessions"
-SlashCmdList.SKILLGUIDEFOREVERPROF = function()
+SlashCmdList.SKILLGUIDEFOREVERPROF = function(msg)
+    msg = type(msg) == "string" and strtrim(string.lower(msg)) or ""
+    if msg == "config" or msg == "options" or msg == "opt" then
+        if ns.OpenOptions then
+            ns.OpenOptions()
+        end
+        return
+    end
     if ns.ToggleProfessionFrame then
         ns.ToggleProfessionFrame()
     end
