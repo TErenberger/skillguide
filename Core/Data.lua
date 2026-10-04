@@ -1,7 +1,7 @@
-﻿-- Forever class skill seed for SkillGuideForever.
+-- Forever class skill seed for SkillGuideForever.
 -- Source: Wowhead Forever ability listviews
 --   https://www.wowhead.com/forever/spells/abilities/
--- Generated: 2026-10-03 02:24 UTC
+-- Generated: 2026-10-04 15:57 UTC
 -- Update: python tools/extract_wowhead.py   or   .\update-data.ps1
 local addonName, ns = ...
 
@@ -44,11 +44,11 @@ ns.SkillData = {
 		{ spellID = 7887, rank = 2, level = 28, name = "Overpower" },
 		{ spellID = 871, rank = 0, level = 28, name = "Shield Wall" },
 		{ spellID = 8204, rank = 3, level = 28, name = "Thunder Clap" },
+		{ spellID = 18499, rank = 0, level = 30, name = "Berserker Rage" },
 		{ spellID = 7369, rank = 2, level = 30, name = "Cleave" },
 		{ spellID = 6548, rank = 4, level = 30, name = "Rend" },
 		{ spellID = 1464, rank = 2, level = 30, name = "Slam" },
 		{ spellID = 11549, rank = 4, level = 32, name = "Battle Shout" },
-		{ spellID = 18499, rank = 0, level = 32, name = "Berserker Rage" },
 		{ spellID = 20658, rank = 2, level = 32, name = "Execute" },
 		{ spellID = 7372, rank = 2, level = 32, name = "Hamstring" },
 		{ spellID = 11564, rank = 5, level = 32, name = "Heroic Strike" },

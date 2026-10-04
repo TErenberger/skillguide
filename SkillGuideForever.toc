@@ -2,7 +2,7 @@
 ## Title: SkillGuide Forever
 ## Notes: Browse Forever class skills and profession recipes with train/skill levels.
 ## Author: Trey
-## Version: 0.3.0
+## Version: 0.4.0
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 ## Category: Class
 ## SavedVariables: SkillGuideForeverDB
@@ -11,11 +11,17 @@
 ## X-Source: https://github.com/TErenberger/skillguide
 ## X-Curse-Project-ID: 1723468
 ## X-Wago-ID: aN0aEa6j
+## AddonCompartmentFunc: SkillGuideForever_OnAddonCompartmentClick
+## AddonCompartmentFuncOnEnter: SkillGuideForever_OnAddonCompartmentEnter
+## AddonCompartmentFuncOnLeave: SkillGuideForever_OnAddonCompartmentLeave
 
 Core\Data.lua
 Core\ProfessionData.lua
 Core\Class.lua
 Core\Profession.lua
+Core\Integration.lua
 UI\MainFrame.lua
 UI\ProfessionFrame.lua
+UI\Skins.lua
+UI\Options.lua
 SkillGuideForever.lua

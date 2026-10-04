@@ -1,0 +1,55 @@
+{
+  "name": "skillguide-forever",
+  "displayName": "SkillGuide Forever",
+  "description": "WoW Forever Classic skill + profession guide addon. Fetch Wowhead data, deploy locally, tag releases, and open GitHub PRs.",
+  "path": "R:/development/skillguide",
+  "commands": {
+    "start": "powershell -ExecutionPolicy Bypass -File .\\scripts\\deploy-local.ps1",
+    "build": "powershell -ExecutionPolicy Bypass -File .\\package.ps1",
+    "test": "powershell -ExecutionPolicy Bypass -File .\\update-data.ps1 -FromCache -DryRun"
+  },
+  "tags": [
+    "wow",
+    "addon",
+    "lua",
+    "classic",
+    "powershell"
+  ],
+  "actions": [
+    {
+      "id": "fetch-data",
+      "label": "Fetch Wowhead data",
+      "command": "powershell -ExecutionPolicy Bypass -File .\\update-data.ps1"
+    },
+    {
+      "id": "fetch-data-deploy",
+      "label": "Fetch data + deploy to WoW",
+      "command": "powershell -ExecutionPolicy Bypass -File .\\update-data.ps1 -Deploy"
+    },
+    {
+      "id": "deploy-local",
+      "label": "Deploy to WoW AddOns",
+      "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\deploy-local.ps1"
+    },
+    {
+      "id": "tag-release",
+      "label": "Tag release (patch, local)",
+      "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\tag-release.ps1 -Bump patch"
+    },
+    {
+      "id": "tag-push-release",
+      "label": "Tag + push release (patch)",
+      "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\tag-release.ps1 -Bump patch -Push"
+    },
+    {
+      "id": "tag-data-release",
+      "label": "Fetch data, tag + push release",
+      "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\tag-release.ps1 -UpdateData -Bump patch -Push"
+    },
+    {
+      "id": "push-pr",
+      "label": "Push branch + open PR",
+      "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\push-pr.ps1"
+    }
+  ]
+}
