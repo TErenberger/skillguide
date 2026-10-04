@@ -38,6 +38,9 @@ function ns.EnsureIntegrationDefaults()
     if db.builtInSkin == nil then
         db.builtInSkin = "blizzard"
     end
+    if db.spellbookPane == nil then
+        db.spellbookPane = true
+    end
 end
 
 function ns.ShouldFireSkinEvents()

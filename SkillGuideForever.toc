@@ -22,6 +22,7 @@ Core\Profession.lua
 Core\Integration.lua
 UI\MainFrame.lua
 UI\ProfessionFrame.lua
+UI\Spellbook.lua
 UI\Skins.lua
 UI\Options.lua
 SkillGuideForever.lua

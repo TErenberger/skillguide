@@ -12,6 +12,7 @@ local scrollChild
 local scrollFrame
 local rowPool = {}
 local pendingSpellIDs = {}
+local attachedHost = nil
 
 -- Light text for ButtonFrameTemplate's dark inset (Forever Character-pane style)
 local COLOR_NAME = { 1.00, 0.82, 0.00 } -- gold
@@ -484,10 +485,42 @@ local function SavePosition()
     if not mainFrame or not ns.db then
         return
     end
+    -- Spellbook-attached layout is transient; keep the free-float SavedVariables.
+    if mainFrame.sgfAttached then
+        return
+    end
     local point, _, _, x, y = mainFrame:GetPoint(1)
     ns.db.point = point or "CENTER"
     ns.db.x = x or 0
     ns.db.y = y or 0
+end
+
+local function RestoreFreePosition()
+    if not mainFrame then
+        return
+    end
+    local point = (ns.db and ns.db.point) or "CENTER"
+    local x = (ns.db and ns.db.x) or 0
+    local y = (ns.db and ns.db.y) or 0
+    mainFrame:ClearAllPoints()
+    mainFrame:SetParent(UIParent)
+    mainFrame:SetPoint(point, UIParent, point, x, y)
+    mainFrame:SetMovable(true)
+    mainFrame:SetToplevel(true)
+    if ns.ApplyFrameAppearance then
+        ns.ApplyFrameAppearance(mainFrame)
+    end
+end
+
+local function EnsureMainFrameContent()
+    if not mainFrame then
+        ns.CreateMainFrame()
+    end
+    if not mainFrame.selectedClass then
+        SetSelectedClass(ns.GetPlayerClassFile())
+    else
+        ns.RefreshSkillList()
+    end
 end
 
 local function ApplyTitle(frame, text)
@@ -559,6 +592,9 @@ function ns.CreateMainFrame()
     mainFrame:SetPoint(point, UIParent, point, x, y)
 
     mainFrame:SetScript("OnDragStart", function(self)
+        if self.sgfAttached then
+            return
+        end
         if not InCombatLockdown or not InCombatLockdown() then
             self:StartMoving()
         end
@@ -574,6 +610,9 @@ function ns.CreateMainFrame()
         titleRegion:EnableMouse(true)
         titleRegion:RegisterForDrag("LeftButton")
         titleRegion:SetScript("OnDragStart", function()
+            if mainFrame.sgfAttached then
+                return
+            end
             if mainFrame:IsMovable() and (not InCombatLockdown or not InCombatLockdown()) then
                 mainFrame:StartMoving()
             end
@@ -760,18 +799,94 @@ function ns.CreateMainFrame()
     return mainFrame
 end
 
+function ns.IsMainFrameAttached()
+    return mainFrame ~= nil and mainFrame.sgfAttached == true
+end
+
+function ns.GetMainFrame()
+    return mainFrame
+end
+
+--- Show the free-floating class skill window (detaches from spellbook if needed).
+function ns.ShowMainFrame()
+    EnsureMainFrameContent()
+    if mainFrame.sgfAttached then
+        ns.DetachMainFrame(false)
+    else
+        RestoreFreePosition()
+        mainFrame:Show()
+    end
+end
+
+function ns.HideMainFrame()
+    if not mainFrame then
+        return
+    end
+    if mainFrame.sgfAttached then
+        ns.DetachMainFrame(true)
+        return
+    end
+    mainFrame:Hide()
+end
+
+--- Dock the existing class skill pane to the right of a host frame (spellbook).
+function ns.AttachMainFrameTo(host)
+    if not host then
+        return false
+    end
+    EnsureMainFrameContent()
+    attachedHost = host
+    mainFrame.sgfAttached = true
+    mainFrame:SetMovable(false)
+    mainFrame:SetToplevel(false)
+    mainFrame:ClearAllPoints()
+    mainFrame:SetParent(host)
+    -- Sit flush against the spellbook like a side panel.
+    mainFrame:SetPoint("TOPLEFT", host, "TOPRIGHT", -6, -12)
+    mainFrame:SetPoint("BOTTOMLEFT", host, "BOTTOMRIGHT", -6, 12)
+    mainFrame:SetWidth(FRAME_WIDTH)
+    local hostStrata = host.GetFrameStrata and host:GetFrameStrata()
+    if hostStrata then
+        mainFrame:SetFrameStrata(hostStrata)
+    end
+    if host.GetFrameLevel then
+        mainFrame:SetFrameLevel(host:GetFrameLevel() + 2)
+    end
+    mainFrame:Show()
+    return true
+end
+
+--- Restore free-float parenting/position. hide=false leaves the window open.
+function ns.DetachMainFrame(hide)
+    if not mainFrame then
+        attachedHost = nil
+        return
+    end
+    if not mainFrame.sgfAttached then
+        if hide then
+            mainFrame:Hide()
+        end
+        return
+    end
+    mainFrame.sgfAttached = false
+    attachedHost = nil
+    RestoreFreePosition()
+    mainFrame:SetWidth(FRAME_WIDTH)
+    mainFrame:SetHeight(FRAME_HEIGHT)
+    if hide ~= false then
+        mainFrame:Hide()
+    else
+        mainFrame:Show()
+    end
+end
+
 function ns.ToggleMainFrame()
     if not mainFrame then
         ns.CreateMainFrame()
     end
     if mainFrame:IsShown() then
-        mainFrame:Hide()
+        ns.HideMainFrame()
     else
-        if not mainFrame.selectedClass then
-            SetSelectedClass(ns.GetPlayerClassFile())
-        else
-            ns.RefreshSkillList()
-        end
-        mainFrame:Show()
+        ns.ShowMainFrame()
     end
 end
