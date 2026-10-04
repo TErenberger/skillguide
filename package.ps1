@@ -48,6 +48,8 @@ $files = @(
     "Core\Integration.lua",
     "UI\MainFrame.lua",
     "UI\ProfessionFrame.lua",
+    "UI\Spellbook.lua",
+    "UI\ProfessionsBook.lua",
     "UI\Skins.lua",
     "UI\Options.lua",
     "docs\INTEGRATION.md"

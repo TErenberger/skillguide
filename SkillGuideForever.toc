@@ -1,8 +1,8 @@
-## Interface: 16001
+﻿## Interface: 16001
 ## Title: SkillGuide Forever
 ## Notes: Browse Forever class skills and profession recipes with train/skill levels.
 ## Author: Trey
-## Version: 0.4.0
+## Version: 0.4.1
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 ## Category: Class
 ## SavedVariables: SkillGuideForeverDB
@@ -23,6 +23,7 @@ Core\Integration.lua
 UI\MainFrame.lua
 UI\ProfessionFrame.lua
 UI\Spellbook.lua
+UI\ProfessionsBook.lua
 UI\Skins.lua
 UI\Options.lua
 SkillGuideForever.lua

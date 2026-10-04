@@ -41,6 +41,9 @@ function ns.EnsureIntegrationDefaults()
     if db.spellbookPane == nil then
         db.spellbookPane = true
     end
+    if db.professionsBookPane == nil then
+        db.professionsBookPane = true
+    end
 end
 
 function ns.ShouldFireSkinEvents()

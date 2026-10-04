@@ -11,6 +11,7 @@ local scrollChild
 local scrollFrame
 local rowPool = {}
 local pendingSpellIDs = {}
+local attachedHost = nil
 
 local COLOR_NAME = { 1.00, 0.82, 0.00 }
 local COLOR_SUB = { 0.90, 0.85, 0.70 }
@@ -497,10 +498,41 @@ local function SavePosition()
     if not profFrame or not ns.db then
         return
     end
+    if profFrame.sgfAttached then
+        return
+    end
     local point, _, _, x, y = profFrame:GetPoint(1)
     ns.db.professionPoint = point or "CENTER"
     ns.db.professionX = x or 40
     ns.db.professionY = y or 0
+end
+
+local function RestoreFreePosition()
+    if not profFrame then
+        return
+    end
+    local point = (ns.db and ns.db.professionPoint) or "CENTER"
+    local x = (ns.db and ns.db.professionX) or 40
+    local y = (ns.db and ns.db.professionY) or 0
+    profFrame:ClearAllPoints()
+    profFrame:SetParent(UIParent)
+    profFrame:SetPoint(point, UIParent, point, x, y)
+    profFrame:SetMovable(true)
+    profFrame:SetToplevel(true)
+    if ns.ApplyFrameAppearance then
+        ns.ApplyFrameAppearance(profFrame)
+    end
+end
+
+local function EnsureProfessionFrameContent()
+    if not profFrame then
+        ns.CreateProfessionFrame()
+    end
+    if not profFrame.selectedProfession then
+        SetSelectedProfession(ns.GetDefaultProfessionKey())
+    else
+        ns.RefreshProfessionList()
+    end
 end
 
 local function ApplyTitle(frame, text)
@@ -568,6 +600,9 @@ function ns.CreateProfessionFrame()
     profFrame:SetPoint(point, UIParent, point, x, y)
 
     profFrame:SetScript("OnDragStart", function(self)
+        if self.sgfAttached then
+            return
+        end
         if not InCombatLockdown or not InCombatLockdown() then
             self:StartMoving()
         end
@@ -582,6 +617,9 @@ function ns.CreateProfessionFrame()
         titleRegion:EnableMouse(true)
         titleRegion:RegisterForDrag("LeftButton")
         titleRegion:SetScript("OnDragStart", function()
+            if profFrame.sgfAttached then
+                return
+            end
             if profFrame:IsMovable() and (not InCombatLockdown or not InCombatLockdown()) then
                 profFrame:StartMoving()
             end
@@ -777,18 +815,92 @@ function ns.CreateProfessionFrame()
     return profFrame
 end
 
+function ns.IsProfessionFrameAttached()
+    return profFrame ~= nil and profFrame.sgfAttached == true
+end
+
+function ns.GetProfessionFrame()
+    return profFrame
+end
+
+function ns.ShowProfessionFrame()
+    EnsureProfessionFrameContent()
+    if profFrame.sgfAttached then
+        ns.DetachProfessionFrame(false)
+    else
+        RestoreFreePosition()
+        profFrame:Show()
+    end
+end
+
+function ns.HideProfessionFrame()
+    if not profFrame then
+        return
+    end
+    if profFrame.sgfAttached then
+        ns.DetachProfessionFrame(true)
+        return
+    end
+    profFrame:Hide()
+end
+
+--- Dock the profession recipe pane to the right of a host (Professions book).
+function ns.AttachProfessionFrameTo(host)
+    if not host then
+        return false
+    end
+    EnsureProfessionFrameContent()
+    attachedHost = host
+    profFrame.sgfAttached = true
+    profFrame:SetMovable(false)
+    profFrame:SetToplevel(false)
+    profFrame:ClearAllPoints()
+    profFrame:SetParent(host)
+    profFrame:SetPoint("TOPLEFT", host, "TOPRIGHT", -6, -12)
+    profFrame:SetPoint("BOTTOMLEFT", host, "BOTTOMRIGHT", -6, 12)
+    profFrame:SetWidth(FRAME_WIDTH)
+    local hostStrata = host.GetFrameStrata and host:GetFrameStrata()
+    if hostStrata then
+        profFrame:SetFrameStrata(hostStrata)
+    end
+    if host.GetFrameLevel then
+        profFrame:SetFrameLevel(host:GetFrameLevel() + 2)
+    end
+    profFrame:Show()
+    return true
+end
+
+--- Restore free-float parenting/position. hide=false leaves the window open.
+function ns.DetachProfessionFrame(hide)
+    if not profFrame then
+        attachedHost = nil
+        return
+    end
+    if not profFrame.sgfAttached then
+        if hide then
+            profFrame:Hide()
+        end
+        return
+    end
+    profFrame.sgfAttached = false
+    attachedHost = nil
+    RestoreFreePosition()
+    profFrame:SetWidth(FRAME_WIDTH)
+    profFrame:SetHeight(FRAME_HEIGHT)
+    if hide ~= false then
+        profFrame:Hide()
+    else
+        profFrame:Show()
+    end
+end
+
 function ns.ToggleProfessionFrame()
     if not profFrame then
         ns.CreateProfessionFrame()
     end
     if profFrame:IsShown() then
-        profFrame:Hide()
+        ns.HideProfessionFrame()
     else
-        if not profFrame.selectedProfession then
-            SetSelectedProfession(ns.GetDefaultProfessionKey())
-        else
-            ns.RefreshProfessionList()
-        end
-        profFrame:Show()
+        ns.ShowProfessionFrame()
     end
 end
