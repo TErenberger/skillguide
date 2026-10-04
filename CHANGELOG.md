@@ -1,5 +1,9 @@
 ﻿# Changelog
 
+## 0.5.0 - 2026-10-04
+
+### Changed
+- Release 0.5.0
 ## 0.4.1 - 2026-10-04
 
 ### Changed
