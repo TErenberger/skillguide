@@ -8,13 +8,23 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Version = "0.4.0",
+    [string]$Version = "",
     [string]$OutDir = ""
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $repoRoot
+
+if (-not $Version) {
+    $toc = Get-Content (Join-Path $repoRoot "SkillGuideForever.toc") -Raw
+    if ($toc -match '(?m)^##\s+Version:\s*(.+)$') {
+        $Version = $Matches[1].Trim()
+    }
+}
+if (-not $Version) {
+    throw "Could not determine version (pass -Version or set ## Version in TOC)."
+}
 
 if (-not $OutDir) {
     $OutDir = Join-Path $repoRoot "dist"

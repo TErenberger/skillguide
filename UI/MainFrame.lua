@@ -79,14 +79,18 @@ local function GetRowStatus(entry, viewingOwnClass)
     return "available", COLOR_AVAILABLE, COLOR_AVAILABLE_SUB
 end
 
--- Train level lives on section headers; rows only show rank / talent / status.
+-- Train level lives on section headers; rows show rank / quest / cost / status.
 local function FormatSubtext(entry, status)
     local parts = {}
     if entry.rank and entry.rank > 0 then
         parts[#parts + 1] = "Rank " .. entry.rank
     end
-    if entry.talent then
-        parts[#parts + 1] = "Talent"
+    if entry.quest then
+        parts[#parts + 1] = "Quest"
+    end
+    local costText = ns.FormatCopper and ns.FormatCopper(entry.cost)
+    if costText then
+        parts[#parts + 1] = costText
     end
     if status == "known" then
         parts[#parts + 1] = "Known"
@@ -234,6 +238,7 @@ local function ConfigureSkillRow(row, entry, viewingOwnClass)
     row.name:SetTextColor(nameColor[1], nameColor[2], nameColor[3])
     row.sub:SetTextColor(subColor[1], subColor[2], subColor[3])
 
+    local costText = ns.FormatCopper and ns.FormatCopper(entry.cost)
     row:SetAlpha(1)
     if status == "known" then
         row.statusText = "Already known"
@@ -241,14 +246,30 @@ local function ConfigureSkillRow(row, entry, viewingOwnClass)
         row.icon:SetVertexColor(0.85, 0.85, 0.85)
     elseif status == "locked" then
         row.statusText = "Requires level " .. tostring(entry.level)
+        if entry.quest then
+            row.statusText = row.statusText .. "  -  Class quest reward"
+        elseif costText then
+            row.statusText = row.statusText .. "  -  Trainer cost " .. costText
+        end
         row.icon:SetDesaturated(false)
         row.icon:SetVertexColor(1, 1, 1)
     elseif status == "available" then
-        row.statusText = "Available to train"
+        if entry.quest then
+            row.statusText = "Available from class quest"
+        else
+            row.statusText = "Available to train"
+        end
+        if costText then
+            row.statusText = row.statusText .. "  -  " .. costText
+        end
         row.icon:SetDesaturated(false)
         row.icon:SetVertexColor(1, 1, 1)
     else
-        row.statusText = nil
+        if entry.quest then
+            row.statusText = "Class quest reward"
+        else
+            row.statusText = costText and ("Trainer cost " .. costText) or nil
+        end
         row.icon:SetDesaturated(false)
         row.icon:SetVertexColor(1, 1, 1)
     end
@@ -320,6 +341,9 @@ local function EntryMatchesSearch(entry, query)
         if string.find(levelText, query, 1, true) or query == tostring(entry.level) then
             return true
         end
+    end
+    if entry.quest and string.find("quest", query, 1, true) then
+        return true
     end
     return false
 end

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Fetch WoW Forever class + profession data from Wowhead and write Core Lua seeds.
 
 Examples:
@@ -18,6 +18,7 @@ import re
 import shutil
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -61,10 +62,27 @@ SSL_CTX = ssl._create_unverified_context()
 USER_AGENT = "SkillGuideForeverDataUpdater/1.0 (+local forever seed refresh)"
 
 
-def fetch(url: str) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=90, context=SSL_CTX) as resp:
-        return resp.read().decode("utf-8", "replace")
+def fetch(url: str, *, retries: int = 4, timeout: int = 30) -> str:
+    last_err = None
+    for attempt in range(retries):
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=SSL_CTX) as resp:
+                return resp.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as exc:
+            last_err = exc
+            # Wowhead occasionally 403/429's bursty spell-page fetches.
+            if exc.code in (403, 429, 503) and attempt + 1 < retries:
+                time.sleep(2.0 * (attempt + 1))
+                continue
+            raise
+        except urllib.error.URLError as exc:
+            last_err = exc
+            if attempt + 1 < retries:
+                time.sleep(1.0 * (attempt + 1))
+                continue
+            raise
+    raise last_err  # pragma: no cover
 
 
 def extract_balanced_any(source: str, start: int) -> str:
@@ -162,18 +180,67 @@ def parse_listviewspells(html: str):
     return js_to_json(raw)
 
 
-def has_trainer_source(item: dict) -> bool:
+# Wowhead ability listview source ids (see listview filters).
+SOURCE_DROP = 2  # tome / drop ranks (e.g. some max ranks)
+SOURCE_QUEST = 4
+SOURCE_TRAINER = 6
+
+# Classic Era / Forever spell ids stay below this; 400k-1.2M is mostly
+# Season of Discovery / Cata leftovers that leak onto Forever listviews.
+CLASSIC_SPELL_ID_MAX = 100_000
+# Forever-authored spell ids observed on trainer rows (Lava Burst, Penance, …).
+FOREVER_SPELL_ID_MIN = 1_200_000
+
+# Auto-learned utilities that never get a trainer/quest source tag.
+AUTO_LEARNED_NAMES = {
+    "auto shot",
+    "battle stance",
+    "berserker stance",
+    "call pet",
+    "defensive stance",
+    "dismiss pet",
+    "feed pet",
+    "revive pet",
+}
+
+
+def source_ids(item: dict) -> list:
     sources = item.get("source") or []
     if not isinstance(sources, list):
         sources = [sources]
-    return (6 in sources) or (item.get("trainingcost") is not None)
+    return [s for s in sources if s is not None]
+
+
+def has_trainer_source(item: dict) -> bool:
+    return (SOURCE_TRAINER in source_ids(item)) or (item.get("trainingcost") is not None)
+
+
+def has_quest_source(item: dict) -> bool:
+    return SOURCE_QUEST in source_ids(item)
+
+
+def has_drop_source(item: dict) -> bool:
+    return SOURCE_DROP in source_ids(item)
+
+
+def env_status(item: dict) -> str | None:
+    env = item.get("envChange") or {}
+    if not isinstance(env, dict):
+        return None
+    status = env.get("status")
+    return str(status) if status else None
 
 
 def is_noise_name(name: str) -> bool:
     lower = name.lower()
     if not name:
         return True
-    return lower.startswith(("improved ", "engrave ", "glyph of ", "test "))
+    if lower.startswith(("improved ", "engrave ", "glyph of ", "test ")):
+        return True
+    # Talent-tree passive ranks that sometimes lack a source tag.
+    if lower.endswith((" specialization", " mastery")):
+        return True
+    return False
 
 
 def class_skill_lines(item: dict) -> list:
@@ -183,20 +250,60 @@ def class_skill_lines(item: dict) -> list:
     return [s for s in skill if s]
 
 
-def should_keep_row(row: dict, item: dict) -> bool:
+def parse_training_cost(item: dict) -> int:
+    cost = item.get("trainingcost")
+    try:
+        cost = int(cost) if cost is not None else 0
+    except (TypeError, ValueError):
+        cost = 0
+    return cost if cost > 0 else 0
+
+
+def passes_base_filters(row: dict, item: dict) -> bool:
+    """Reject obvious non-abilities before Forever availability checks."""
     if row["level"] <= 0:
         return False
     if is_noise_name(row["name"]):
         return False
     if not class_skill_lines(item):
         return False
-    if row["trainer"]:
+    if env_status(item) == "removed":
+        return False
+    return True
+
+
+def is_forever_available_row(row: dict, item: dict, sourced_names: set) -> bool:
+    """Keep only abilities that exist for players in WoW Forever.
+
+    Wowhead's Forever ability listviews also include unsigned SoD/Cata spell
+    rows (Lava Lash, Healing Rain, …). Those have no trainer/quest/drop source
+    and mid-range spell ids, so they are dropped here.
+    """
+    if row.get("trainer") or row.get("quest") or row.get("drop"):
         return True
-    env = item.get("envChange") or {}
-    if isinstance(env, dict) and env.get("status") == "new":
+
+    sid = int(row["spellID"])
+    name_key = (row.get("name") or "").lower()
+    src = source_ids(item)
+    status = env_status(item)
+
+    # Earlier ranks / auto-learns of trainer/quest/book abilities.
+    if not src and sid < CLASSIC_SPELL_ID_MAX:
+        if name_key in sourced_names or name_key in AUTO_LEARNED_NAMES:
+            return True
+        if row["level"] <= 1:
+            return True
+
+    # Unique Forever-authored spells sometimes lack a source tag. Skip when a
+    # trainer/quest/book sibling already covers the ability name (duplicates).
+    if (
+        not src
+        and sid >= FOREVER_SPELL_ID_MIN
+        and status == "new"
+        and name_key not in sourced_names
+    ):
         return True
-    if row["spellID"] >= 1_200_000:
-        return True
+
     return False
 
 
@@ -215,7 +322,7 @@ def extract_class(class_slug: str, *, from_cache: bool = False) -> list:
         cache_html.write_text(html, encoding="utf-8")
 
     items = parse_listviewspells(html)
-    rows = []
+    candidates = []
     for item in items:
         if not isinstance(item, dict):
             continue
@@ -226,24 +333,46 @@ def extract_class(class_slug: str, *, from_cache: bool = False) -> list:
         rank = normalize_rank(item.get("rank"))
         level = int(item.get("level") or 0)
         trainer = has_trainer_source(item)
-        labels = []
-        env = item.get("envChange") or {}
-        if isinstance(env, dict):
-            labels = [str(x).lower() for x in (env.get("labels") or [])]
-        talent = ("talent" in labels) or (
-            not trainer and name.lower().startswith("improved ")
-        )
+        quest = has_quest_source(item)
+        drop = has_drop_source(item)
+        cost = parse_training_cost(item)
 
         row = {
             "spellID": int(sid),
             "rank": rank,
             "level": level,
             "name": name,
-            "talent": bool(talent),
+            "quest": bool(quest),
+            "drop": bool(drop),
             "trainer": bool(trainer),
+            "cost": cost,
         }
-        if should_keep_row(row, item):
+        if passes_base_filters(row, item):
+            candidates.append((row, item))
+
+    sourced_names = {
+        (row.get("name") or "").lower()
+        for row, _item in candidates
+        if row.get("trainer") or row.get("quest") or row.get("drop")
+    }
+
+    rows = []
+    skipped_unsigned = 0
+    for row, item in candidates:
+        if is_forever_available_row(row, item, sourced_names):
+            # Internal helper flag; not written to Lua.
+            row = {
+                "spellID": row["spellID"],
+                "rank": row["rank"],
+                "level": row["level"],
+                "name": row["name"],
+                "quest": row["quest"],
+                "trainer": row["trainer"],
+                "cost": row["cost"],
+            }
             rows.append(row)
+        else:
+            skipped_unsigned += 1
 
     by_key = {}
     for r in rows:
@@ -252,8 +381,16 @@ def extract_class(class_slug: str, *, from_cache: bool = False) -> list:
         if not prev:
             by_key[key] = r
             continue
-        prev_score = (1 if prev["trainer"] else 0, prev["spellID"])
-        new_score = (1 if r["trainer"] else 0, r["spellID"])
+        prev_score = (
+            1 if prev["trainer"] else 0,
+            1 if prev["quest"] else 0,
+            prev["spellID"],
+        )
+        new_score = (
+            1 if r["trainer"] else 0,
+            1 if r["quest"] else 0,
+            r["spellID"],
+        )
         if new_score > prev_score:
             by_key[key] = r
 
@@ -264,8 +401,14 @@ def extract_class(class_slug: str, *, from_cache: bool = False) -> list:
         json.dumps(rows, indent=2), encoding="utf-8"
     )
     print(
-        "         %s: %d skills (%d trainer-tagged)"
-        % (class_slug, len(rows), sum(1 for r in rows if r["trainer"]))
+        "         %s: %d skills (trainer=%d quest=%d; skipped %d unsigned)"
+        % (
+            class_slug,
+            len(rows),
+            sum(1 for r in rows if r.get("trainer")),
+            sum(1 for r in rows if r.get("quest")),
+            skipped_unsigned,
+        )
     )
     return rows
 
@@ -284,11 +427,16 @@ def write_data_lua(all_data: dict, generated_at: str):
     for class_file in [c.upper() for c in CLASSES]:
         lines.append("\t%s = {" % class_file)
         for s in all_data.get(class_file, []):
-            talent = ", talent = true" if s.get("talent") else ""
+            flags = ""
+            if s.get("quest"):
+                flags += ", quest = true"
+            cost = int(s.get("cost") or 0)
+            if cost > 0:
+                flags += ", cost = %d" % cost
             name = (s.get("name") or "").replace("\\", "\\\\").replace('"', '\\"')
             lines.append(
                 '\t\t{ spellID = %d, rank = %d, level = %d, name = "%s"%s },'
-                % (s["spellID"], s["rank"], s["level"], name, talent)
+                % (s["spellID"], s["rank"], s["level"], name, flags)
             )
         lines.append("\t},")
     lines.append("}")
@@ -341,6 +489,13 @@ def extract_profession(slug: str, key: str, prefix: str, *, from_cache: bool = F
         if not isinstance(sources, list):
             sources = [sources]
         trainer = (6 in sources) or (item.get("trainingcost") is not None)
+        cost = item.get("trainingcost")
+        try:
+            cost = int(cost) if cost is not None else 0
+        except (TypeError, ValueError):
+            cost = 0
+        if cost < 0:
+            cost = 0
         colors = item.get("colors") or []
         orange = int(colors[0]) if len(colors) > 0 else skill
         yellow = int(colors[1]) if len(colors) > 1 else skill
@@ -364,6 +519,7 @@ def extract_profession(slug: str, key: str, prefix: str, *, from_cache: bool = F
                 "skill": skill,
                 "name": name,
                 "trainer": bool(trainer),
+                "cost": cost,
                 "orange": orange,
                 "yellow": yellow,
                 "green": green,
@@ -403,10 +559,12 @@ def write_profession_data_lua(all_data: dict, generated_at: str):
         lines.append("\t%s = {" % key)
         for s in all_data.get(key, []):
             trainer = ", trainer = true" if s.get("trainer") else ""
+            cost = int(s.get("cost") or 0)
+            cost_field = (", cost = %d" % cost) if cost > 0 else ""
             name = (s.get("name") or "").replace("\\", "\\\\").replace('"', '\\"')
             lines.append(
                 "\t\t{ spellID = %d, skill = %d, name = \"%s\", "
-                "orange = %d, yellow = %d, green = %d, gray = %d%s },"
+                "orange = %d, yellow = %d, green = %d, gray = %d%s%s },"
                 % (
                     s["spellID"],
                     s["skill"],
@@ -416,6 +574,7 @@ def write_profession_data_lua(all_data: dict, generated_at: str):
                     s["green"],
                     s["gray"],
                     trainer,
+                    cost_field,
                 )
             )
         lines.append("\t},")

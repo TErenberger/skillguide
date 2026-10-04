@@ -80,12 +80,29 @@ Code-only:
 
 Watch the run summary for which hosts will receive the file (CurseForge / Wago / GitHub).
 
-### C) Manual zip (no Actions)
+### C) Local package + upload (no Actions)
+
+Same hosts as Actions, from your PC. Put tokens in a gitignored `.env` (see [`.env.example`](.env.example)) or set them in the shell:
 
 ```powershell
-.\package.ps1 -Version 0.3.1
-.\upload-curseforge.ps1 -Version 0.3.1
+# .env
+# CF_API_KEY=...
+# WAGO_API_TOKEN=...
+
+.\scripts\publish-local.ps1                  # package + CurseForge + Wago
+.\scripts\publish-local.ps1 -CurseForgeOnly
+.\scripts\publish-local.ps1 -WagoOnly
 ```
+
+Or step by step:
+
+```powershell
+.\package.ps1
+.\upload-curseforge.ps1
+.\upload-wago.ps1
+```
+
+Also available as App Manager actions / Deploy targets on **SkillGuide Forever**.
 
 ---
 
@@ -119,4 +136,5 @@ Artifact label/name uses a `-forever` suffix so Forever builds are obvious next 
 | GitHub Release missing | Enable read/write workflow permissions |
 | CurseForge skipped | Check `CF_API_KEY` secret + TOC project id |
 | Wago skipped | Create Wago project, set `## X-Wago-ID`, add `WAGO_API_TOKEN` |
-| Actions won't run | Billing/payment method on the GitHub account/org; use `.\package.ps1` + `.\upload-curseforge.ps1` meanwhile |
+| Actions won't run | Billing/payment method on the GitHub account/org; use `.\scripts\publish-local.ps1` meanwhile |
+| Local upload skipped | Set `CF_API_KEY` / `WAGO_API_TOKEN` in `.env` or the process environment |

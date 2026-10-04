@@ -108,13 +108,17 @@ local function FormatSkillBreakpoints(entry)
     )
 end
 
--- Learn skill lives on section headers; rows show source / breakpoints / status.
+-- Learn skill lives on section headers; rows show source / cost / breakpoints / status.
 local function FormatSubtext(entry, status, subColor)
     local parts = {}
     if entry.trainer then
         parts[#parts + 1] = TintText(subColor, "Trainer")
     else
         parts[#parts + 1] = TintText(subColor, "Recipe")
+    end
+    local costText = ns.FormatCopper and ns.FormatCopper(entry.cost)
+    if costText then
+        parts[#parts + 1] = TintText(subColor, costText)
     end
     if entry.orange and entry.gray and entry.gray > 0 then
         parts[#parts + 1] = FormatSkillBreakpoints(entry)
@@ -304,6 +308,7 @@ local function ConfigureRecipeRow(row, entry)
     -- Subtext embeds its own |c colors (incl. O/Y/G/Gray breakpoints).
     row.sub:SetTextColor(1, 1, 1)
 
+    local costText = ns.FormatCopper and ns.FormatCopper(entry.cost)
     row:SetAlpha(1)
     if status == "known" then
         row.statusText = "Already known"
@@ -311,14 +316,20 @@ local function ConfigureRecipeRow(row, entry)
         row.icon:SetVertexColor(0.85, 0.85, 0.85)
     elseif status == "locked" then
         row.statusText = "Requires skill " .. tostring(entry.skill)
+        if costText then
+            row.statusText = row.statusText .. "  -  Trainer cost " .. costText
+        end
         row.icon:SetDesaturated(false)
         row.icon:SetVertexColor(1, 1, 1)
     elseif status == "available" then
         row.statusText = "Available to learn"
+        if costText then
+            row.statusText = row.statusText .. "  -  " .. costText
+        end
         row.icon:SetDesaturated(false)
         row.icon:SetVertexColor(1, 1, 1)
     else
-        row.statusText = nil
+        row.statusText = costText and ("Trainer cost " .. costText) or nil
         row.icon:SetDesaturated(false)
         row.icon:SetVertexColor(1, 1, 1)
     end

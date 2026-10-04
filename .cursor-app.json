@@ -1,12 +1,13 @@
 {
   "name": "skillguide-forever",
   "displayName": "SkillGuide Forever",
-  "description": "WoW Forever Classic skill + profession guide addon. Fetch Wowhead data, deploy locally, tag releases, and open GitHub PRs.",
+  "description": "WoW Forever Classic skill + profession guide addon. Fetch Wowhead data, deploy locally, tag releases, publish to CurseForge/Wago, and open GitHub PRs.",
   "path": "R:/development/skillguide",
   "commands": {
     "start": "powershell -ExecutionPolicy Bypass -File .\\scripts\\deploy-local.ps1",
     "build": "powershell -ExecutionPolicy Bypass -File .\\package.ps1",
-    "test": "powershell -ExecutionPolicy Bypass -File .\\update-data.ps1 -FromCache -DryRun"
+    "test": "powershell -ExecutionPolicy Bypass -File .\\update-data.ps1 -FromCache -DryRun",
+    "deploy": "powershell -ExecutionPolicy Bypass -File .\\scripts\\publish-local.ps1"
   },
   "tags": [
     "wow",
@@ -32,6 +33,26 @@
       "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\deploy-local.ps1"
     },
     {
+      "id": "package",
+      "label": "Package zip",
+      "command": "powershell -ExecutionPolicy Bypass -File .\\package.ps1"
+    },
+    {
+      "id": "publish-hosts",
+      "label": "Publish to CurseForge + Wago",
+      "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\publish-local.ps1"
+    },
+    {
+      "id": "publish-curseforge",
+      "label": "Publish to CurseForge only",
+      "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\publish-local.ps1 -CurseForgeOnly"
+    },
+    {
+      "id": "publish-wago",
+      "label": "Publish to Wago only",
+      "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\publish-local.ps1 -WagoOnly"
+    },
+    {
       "id": "tag-release",
       "label": "Tag release (patch, local)",
       "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\tag-release.ps1 -Bump patch"
@@ -51,5 +72,38 @@
       "label": "Push branch + open PR",
       "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\push-pr.ps1"
     }
-  ]
+  ],
+  "deploy": {
+    "targets": [
+      {
+        "id": "curseforge-wago",
+        "label": "CurseForge + Wago",
+        "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\publish-local.ps1"
+      },
+      {
+        "id": "curseforge",
+        "label": "CurseForge only",
+        "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\publish-local.ps1 -CurseForgeOnly"
+      },
+      {
+        "id": "wago",
+        "label": "Wago only",
+        "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\publish-local.ps1 -WagoOnly"
+      }
+    ],
+    "options": [
+      {
+        "id": "beta",
+        "label": "Upload as beta",
+        "type": "boolean",
+        "flag": "-ReleaseType beta"
+      },
+      {
+        "id": "skipPackage",
+        "label": "Skip packaging (reuse dist zip)",
+        "type": "boolean",
+        "flag": "-SkipPackage"
+      }
+    ]
+  }
 }

@@ -28,6 +28,46 @@ function ns.GetClassDisplayName(classFile)
     return CLASS_DISPLAY[classFile] or classFile
 end
 
+--- Format Wowhead/trainer copper using Blizzard gold/silver/copper coin icons when available.
+--- Returns nil when copper is missing or zero so callers can omit the segment.
+function ns.FormatCopper(copper, fontHeight)
+    copper = tonumber(copper)
+    if not copper or copper <= 0 then
+        return nil
+    end
+    copper = math.floor(copper + 0.5)
+    fontHeight = tonumber(fontHeight) or 10
+
+    if C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString then
+        local ok, text = pcall(C_CurrencyInfo.GetCoinTextureString, copper, fontHeight)
+        if ok and type(text) == "string" and text ~= "" then
+            return text
+        end
+    end
+    if GetCoinTextureString then
+        local ok, text = pcall(GetCoinTextureString, copper, fontHeight)
+        if ok and type(text) == "string" and text ~= "" then
+            return text
+        end
+    end
+
+    -- Fallback if coin-texture APIs are unavailable.
+    local gold = math.floor(copper / 10000)
+    local silver = math.floor((copper % 10000) / 100)
+    local copperOnly = copper % 100
+    local parts = {}
+    if gold > 0 then
+        parts[#parts + 1] = gold .. "g"
+    end
+    if silver > 0 then
+        parts[#parts + 1] = silver .. "s"
+    end
+    if copperOnly > 0 or #parts == 0 then
+        parts[#parts + 1] = copperOnly .. "c"
+    end
+    return table.concat(parts, " ")
+end
+
 function ns.GetPlayerClassFile()
     local classFile
     if UnitClassBase then

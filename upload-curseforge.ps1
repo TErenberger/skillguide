@@ -4,19 +4,19 @@
 
 .EXAMPLE
   $env:CF_API_KEY = "your-token"
-  .\package.ps1 -Version 0.2.0
-  .\upload-curseforge.ps1 -Version 0.2.0
+  .\package.ps1
+  .\upload-curseforge.ps1
 
 .EXAMPLE
-  .\upload-curseforge.ps1 -Version 0.2.0 -ApiToken "your-token" -ReleaseType beta
+  .\upload-curseforge.ps1 -Version 0.4.0 -ApiToken "your-token" -ReleaseType beta
 #>
 [CmdletBinding()]
 param(
-    [string]$Version = "0.4.0",
+    [string]$Version = "",
     [string]$ApiToken = $env:CF_API_KEY,
     [ValidateSet("alpha", "beta", "release")]
     [string]$ReleaseType = "release",
-    [int]$ProjectId = 1723468,
+    [int]$ProjectId = 0,
     [string]$ZipPath = "",
     [string]$ChangelogPath = ""
 )
@@ -25,6 +25,39 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $repoRoot
 
+$secrets = Join-Path $repoRoot "scripts\Import-LocalSecrets.ps1"
+if (Test-Path $secrets) {
+    & $secrets
+    if (-not $ApiToken) {
+        $ApiToken = $env:CF_API_KEY
+    }
+}
+
+function Get-TocField([string]$field) {
+    $toc = Get-Content (Join-Path $repoRoot "SkillGuideForever.toc") -Raw
+    $pattern = "(?m)^##\s+$([regex]::Escape($field)):\s*(.+)$"
+    if ($toc -match $pattern) {
+        return $Matches[1].Trim()
+    }
+    return $null
+}
+
+if (-not $Version) {
+    $Version = Get-TocField "Version"
+}
+if (-not $Version) {
+    throw "Could not determine version (pass -Version or set ## Version in TOC)."
+}
+
+if ($ProjectId -le 0) {
+    $tocProject = Get-TocField "X-Curse-Project-ID"
+    if ($tocProject) {
+        $ProjectId = [int]$tocProject
+    } else {
+        $ProjectId = 1723468
+    }
+}
+
 if (-not $ApiToken) {
     Write-Host ""
     Write-Host "CurseForge API token required." -ForegroundColor Yellow
@@ -32,8 +65,7 @@ if (-not $ApiToken) {
     Write-Host "Then either:"
     Write-Host '  $env:CF_API_KEY = "paste-token-here"'
     Write-Host "  .\upload-curseforge.ps1 -Version $Version"
-    Write-Host "or:"
-    Write-Host "  .\upload-curseforge.ps1 -Version $Version -ApiToken `"paste-token-here`""
+    Write-Host "or put CF_API_KEY=... in a local .env file."
     Write-Host ""
     throw "CF_API_KEY / -ApiToken missing"
 }

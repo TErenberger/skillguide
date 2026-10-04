@@ -88,7 +88,8 @@ Manual zip only:
 
 ```powershell
 .\package.ps1 -Version 0.3.0
-.\upload-curseforge.ps1 -Version 0.3.0
+.\scripts\publish-local.ps1
+# or: .\upload-curseforge.ps1   /   .\upload-wago.ps1
 ```
 
 See [RELEASE.md](RELEASE.md) for Wago/CurseForge/WoWI wiring details.
