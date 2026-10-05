@@ -743,9 +743,9 @@ local function RemoveChromeSkin(frame, widgets)
     if title and state and state.titleR then
         title:SetTextColor(state.titleR, state.titleG, state.titleB)
     end
-    -- Restore Blizzard portrait clearance for the toolbar.
+    -- Restore Blizzard portrait clearance for the toolbar (attached panes keep the tight layout).
     if ns.SetPortraitClearance then
-        ns.SetPortraitClearance(frame, true)
+        ns.SetPortraitClearance(frame, frame.sgfAttached and false or true)
     end
     frame.SGFActiveBuiltInSkin = nil
 end

@@ -1,4 +1,4 @@
-﻿local addonName, ns = ...
+local addonName, ns = ...
 
 -- Spellbook-like row: icon + name + subtext (rank / status)
 local ROW_HEIGHT = 42
@@ -282,21 +282,56 @@ local function ConfigureSkillRow(row, entry, viewingOwnClass)
     end
 end
 
+local function GetPortraitTexture(frame)
+    if not frame then
+        return nil
+    end
+    local container = frame.PortraitContainer
+    if container then
+        return container.portrait or container.Portrait or container.Icon
+    end
+    return frame.portrait or frame.Portrait
+end
+
 local function UpdatePortrait(classFile)
     if not mainFrame then
         return
     end
+    -- Never paint the portrait while docked; attach layout hides that chrome.
+    if mainFrame.sgfAttached then
+        return
+    end
+    if ButtonFrameTemplate_ShowPortrait then
+        pcall(ButtonFrameTemplate_ShowPortrait, mainFrame)
+    end
     local path, coords = GetClassIconTexture(classFile)
-    local portrait = mainFrame.PortraitContainer and mainFrame.PortraitContainer.portrait
-        or mainFrame.portrait
+    local container = mainFrame.PortraitContainer
+    if container then
+        container:Show()
+        if container.CircleMask then
+            container.CircleMask:Show()
+        end
+    end
+    if mainFrame.PortraitFrame then
+        mainFrame.PortraitFrame:Show()
+    end
+    local portrait = GetPortraitTexture(mainFrame)
     if not portrait then
         return
     end
-    portrait:SetTexture(path)
-    if coords then
-        portrait:SetTexCoord(unpack(coords))
+    portrait:Show()
+    -- Class circle sheet needs SetTexture + texcoords; SetPortraitToTexture
+    -- would flatten the crop. Prefer atlas when Forever provides one.
+    local atlas = classFile and ("classicon-" .. string.lower(classFile))
+    if atlas and portrait.SetAtlas and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) then
+        portrait:SetAtlas(atlas)
     else
-        portrait:SetTexCoord(0, 1, 0, 1)
+        portrait:SetTexture(path)
+        if coords then
+            portrait:SetTexCoord(unpack(coords))
+        else
+            portrait:SetTexCoord(0, 1, 0, 1)
+        end
     end
 end
 
@@ -464,6 +499,9 @@ local function SetSelectedClass(classFile)
     ns.RefreshSkillList()
 end
 
+local DROPDOWN_WIDTH_FREE = 130
+local DROPDOWN_TEMPLATE_PAD = 28
+
 local function InitClassDropdown(dropdown)
     UIDropDownMenu_Initialize(dropdown, function()
         for _, classFile in ipairs(ns.CLASS_ORDER) do
@@ -476,9 +514,106 @@ local function InitClassDropdown(dropdown)
             UIDropDownMenu_AddButton(info)
         end
     end)
-    UIDropDownMenu_SetWidth(dropdown, 130)
-    dropdown.SGFMenuWidth = 130
+    UIDropDownMenu_SetWidth(dropdown, DROPDOWN_WIDTH_FREE)
+    dropdown.SGFMenuWidth = DROPDOWN_WIDTH_FREE
     UIDropDownMenu_JustifyText(dropdown, "LEFT")
+end
+
+--- Re-anchor toolbar/scroll/controls for free-float vs docked (no portrait gutter).
+local function LayoutMainToolbar()
+    if not mainFrame then
+        return
+    end
+    local toolbar = mainFrame.toolbar
+    local dropdown = mainFrame.classDropdown
+    local classLabel = mainFrame.classLabel
+    local hideKnownLabel = mainFrame.hideKnownLabel
+    local search = mainFrame.searchBox
+    local layout = mainFrame.SGFLayout
+    if not toolbar or not dropdown or not layout then
+        return
+    end
+
+    local attached = mainFrame.sgfAttached == true
+    local left = attached and (layout.toolbarLeftSkinned or 8) or (layout.toolbarLeftPortrait or 56)
+    local inset = mainFrame.Inset or mainFrame.inset
+    local widgets = mainFrame.SkillGuideForeverWidgets
+    local scroll = (widgets and widgets.scrollFrame) or mainFrame.sgfScrollFrame
+
+    toolbar:ClearAllPoints()
+    if layout.hasInset and inset then
+        toolbar:SetPoint("TOPLEFT", inset, "TOPLEFT", left, layout.toolbarTop or -4)
+        toolbar:SetPoint("TOPRIGHT", inset, "TOPRIGHT", layout.toolbarRight or -8, layout.toolbarTop or -4)
+    else
+        toolbar:SetPoint("TOPLEFT", left + 4, -60)
+        toolbar:SetPoint("TOPRIGHT", -12, -60)
+    end
+
+    if scroll then
+        scroll:ClearAllPoints()
+        if layout.hasInset and inset then
+            scroll:SetPoint(
+                "TOPLEFT",
+                toolbar,
+                "BOTTOMLEFT",
+                (layout.listInset or 12) - left,
+                layout.scrollGap or -6
+            )
+            scroll:SetPoint(
+                "BOTTOMRIGHT",
+                inset,
+                "BOTTOMRIGHT",
+                layout.scrollRight or -28,
+                layout.scrollBottom or 12
+            )
+        else
+            scroll:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", -36, -6)
+            scroll:SetPoint("BOTTOMRIGHT", -36, 20)
+        end
+    end
+
+    if classLabel then
+        if attached then
+            classLabel:Hide()
+        else
+            classLabel:Show()
+        end
+    end
+
+    dropdown:ClearAllPoints()
+    if attached then
+        dropdown:SetPoint("TOPLEFT", toolbar, "TOPLEFT", -4, -2)
+        local tw = toolbar:GetWidth() or 0
+        if tw < 40 then
+            tw = (mainFrame:GetWidth() or FRAME_WIDTH) - 20
+        end
+        -- Leave room for the right-aligned "Hide known" control.
+        local reserved = hideKnownLabel and 96 or 8
+        local width = math.max(100, math.floor(tw - reserved - DROPDOWN_TEMPLATE_PAD))
+        dropdown.SGFMenuWidth = width
+        if UIDropDownMenu_SetWidth then
+            UIDropDownMenu_SetWidth(dropdown, width)
+        end
+    else
+        if classLabel then
+            dropdown:SetPoint("LEFT", classLabel, "RIGHT", -12, -2)
+        else
+            dropdown:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 0, -2)
+        end
+        dropdown.SGFMenuWidth = DROPDOWN_WIDTH_FREE
+        if UIDropDownMenu_SetWidth then
+            UIDropDownMenu_SetWidth(dropdown, DROPDOWN_WIDTH_FREE)
+        end
+    end
+
+    if search then
+        local pad = attached and 0 or 4
+        search:ClearAllPoints()
+        search:SetPoint("TOPLEFT", toolbar, "TOPLEFT", pad, -28)
+        search:SetPoint("TOPRIGHT", toolbar, "TOPRIGHT", -pad, -28)
+    end
+
+    mainFrame.SGFPortraitClearance = not attached
 end
 
 local function SavePosition()
@@ -645,6 +780,7 @@ function ns.CreateMainFrame()
     local toolbar = CreateFrame("Frame", nil, mainFrame)
     toolbar:SetHeight(72)
     mainFrame.toolbar = toolbar
+    mainFrame.SGFLayoutToolbar = LayoutMainToolbar
     if inset then
         toolbar:SetPoint("TOPLEFT", inset, "TOPLEFT", TOOLBAR_LEFT, -4)
         toolbar:SetPoint("TOPRIGHT", inset, "TOPRIGHT", -8, -4)
@@ -652,11 +788,15 @@ function ns.CreateMainFrame()
         toolbar:SetPoint("TOPLEFT", TOOLBAR_LEFT + 4, -60)
         toolbar:SetPoint("TOPRIGHT", -12, -60)
     end
+    toolbar:SetScript("OnSizeChanged", function()
+        LayoutMainToolbar()
+    end)
 
     local classLabel = toolbar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     classLabel:SetPoint("TOPLEFT", 0, -2)
     classLabel:SetText("Class")
     classLabel:SetTextColor(COLOR_LABEL[1], COLOR_LABEL[2], COLOR_LABEL[3])
+    mainFrame.classLabel = classLabel
 
     local dropdown = CreateFrame("Frame", "SkillGuideForeverClassDropdown", toolbar, "UIDropDownMenuTemplate")
     dropdown:SetPoint("LEFT", classLabel, "RIGHT", -12, -2)
@@ -738,6 +878,7 @@ function ns.CreateMainFrame()
 
     -- Scrollable skill list (anchored under toolbar so skin clearance can shift it)
     scrollFrame = CreateFrame("ScrollFrame", "SkillGuideForeverScrollFrame", mainFrame, "UIPanelScrollFrameTemplate")
+    mainFrame.sgfScrollFrame = scrollFrame
     if inset then
         scrollFrame:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", LIST_INSET - TOOLBAR_LEFT, -6)
         scrollFrame:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -28, LIST_INSET)
@@ -766,6 +907,9 @@ function ns.CreateMainFrame()
     mainFrame:SetScript("OnShow", function(self)
         if PlaySound and SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_OPEN then
             PlaySound(SOUNDKIT.IG_CHARACTER_INFO_OPEN)
+        end
+        if not self.sgfAttached then
+            UpdatePortrait(self.selectedClass or ns.GetPlayerClassFile())
         end
         if ns.NotifyFrameShow then
             ns.NotifyFrameShow("main", self)
@@ -816,6 +960,7 @@ function ns.ShowMainFrame()
         RestoreFreePosition()
         mainFrame:Show()
     end
+    UpdatePortrait(mainFrame.selectedClass or ns.GetPlayerClassFile())
 end
 
 function ns.HideMainFrame()
@@ -841,9 +986,9 @@ function ns.AttachMainFrameTo(host)
     mainFrame:SetToplevel(false)
     mainFrame:ClearAllPoints()
     mainFrame:SetParent(host)
-    -- Sit flush against the spellbook like a side panel.
-    mainFrame:SetPoint("TOPLEFT", host, "TOPRIGHT", -6, -12)
-    mainFrame:SetPoint("BOTTOMLEFT", host, "BOTTOMRIGHT", -6, 12)
+    -- Slightly shorter than the host so the side pane reads as a distinct panel.
+    mainFrame:SetPoint("TOPLEFT", host, "TOPRIGHT", -6, -22)
+    mainFrame:SetPoint("BOTTOMLEFT", host, "BOTTOMRIGHT", -6, 40)
     mainFrame:SetWidth(FRAME_WIDTH)
     local hostStrata = host.GetFrameStrata and host:GetFrameStrata()
     if hostStrata then
@@ -852,7 +997,12 @@ function ns.AttachMainFrameTo(host)
     if host.GetFrameLevel then
         mainFrame:SetFrameLevel(host:GetFrameLevel() + 2)
     end
+    if ns.ApplyAttachedPaneLayout then
+        ns.ApplyAttachedPaneLayout(mainFrame)
+    end
     mainFrame:Show()
+    -- After OnShow/skins so the no-portrait toolbar wins the layout race.
+    LayoutMainToolbar()
     return true
 end
 
@@ -870,9 +1020,14 @@ function ns.DetachMainFrame(hide)
     end
     mainFrame.sgfAttached = false
     attachedHost = nil
+    if ns.RestoreAttachedPaneLayout then
+        ns.RestoreAttachedPaneLayout(mainFrame)
+    end
     RestoreFreePosition()
     mainFrame:SetWidth(FRAME_WIDTH)
     mainFrame:SetHeight(FRAME_HEIGHT)
+    LayoutMainToolbar()
+    UpdatePortrait(mainFrame.selectedClass or ns.GetPlayerClassFile())
     if hide ~= false then
         mainFrame:Hide()
     else
