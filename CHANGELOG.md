@@ -1,5 +1,13 @@
-# Changelog
+﻿# Changelog
 
+## 0.5.0 - 2026-10-04
+
+### Changed
+- Release 0.5.0
+## 0.4.1 - 2026-10-04
+
+### Changed
+- Release 0.4.1
 All notable changes to SkillGuide Forever are documented here.
 
 ## 0.4.0 - 2026-10-03
@@ -7,7 +15,7 @@ All notable changes to SkillGuide Forever are documented here.
 ### Added
 - Public skin/integration API (`SkillGuideForeverAPI`) with create/show/hide/refresh callbacks for ElvUI, AddOnSkins, and similar tools
 - Built-in **Flat Dark** and **Midnight Gold** test skins (same callback path as external skinners) selectable under Window skin
-- Esc → Options → AddOns settings: window skin, external skins, window scale, frame strata, Addon Compartment
+- Esc â†’ Options â†’ AddOns settings: window skin, external skins, window scale, frame strata, Addon Compartment
 - Addon Compartment entry plus `/sg config` / `/pg config`
 - Stable widget handles on each frame (`SkillGuideForeverWidgets`) for third-party skinners
 - Professions **Hide recipes** filter and a cleaner three-row toolbar (no count subtitle)

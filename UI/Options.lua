@@ -205,6 +205,58 @@ local function RegisterSettingsPanel()
         )
     end
 
+    -- Spellbook side pane
+    do
+        local setting = Settings.RegisterAddOnSetting(
+            category,
+            "SkillGuideForever_spellbookPane",
+            "spellbookPane",
+            ns.db,
+            Settings.VarType.Boolean,
+            "Spellbook skill pane",
+            true
+        )
+        if setting.SetValueChangedCallback then
+            setting:SetValueChangedCallback(function(_, value)
+                ns.NotifyOptionsChanged("spellbookPane", value)
+                if ns.RefreshSpellbookIntegration then
+                    ns.RefreshSpellbookIntegration()
+                end
+            end)
+        end
+        Settings.CreateCheckbox(
+            category,
+            setting,
+            "Add a SkillGuide button on the Blizzard spellbook that opens the class skill list as an attached side pane."
+        )
+    end
+
+    -- Professions book side pane
+    do
+        local setting = Settings.RegisterAddOnSetting(
+            category,
+            "SkillGuideForever_professionsBookPane",
+            "professionsBookPane",
+            ns.db,
+            Settings.VarType.Boolean,
+            "Professions book pane",
+            true
+        )
+        if setting.SetValueChangedCallback then
+            setting:SetValueChangedCallback(function(_, value)
+                ns.NotifyOptionsChanged("professionsBookPane", value)
+                if ns.RefreshProfessionsBookIntegration then
+                    ns.RefreshProfessionsBookIntegration()
+                end
+            end)
+        end
+        Settings.CreateCheckbox(
+            category,
+            setting,
+            "Add a SkillGuide button on Blizzard craft/tradeskill windows that opens the profession recipe list as an attached side pane."
+        )
+    end
+
     -- Window scale (guarded: slider helpers vary slightly by client build)
     if Settings.CreateSlider and Settings.CreateSliderOptions then
         local ok = pcall(function()

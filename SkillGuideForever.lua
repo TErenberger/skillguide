@@ -60,6 +60,15 @@ function eventFrame:PLAYER_LOGIN()
     if ns.CreateMainFrame then
         ns.CreateMainFrame()
     end
+    if ns.InitSpellbookIntegration then
+        ns.InitSpellbookIntegration()
+    end
+    if ns.CreateProfessionFrame then
+        ns.CreateProfessionFrame()
+    end
+    if ns.InitProfessionsBookIntegration then
+        ns.InitProfessionsBookIntegration()
+    end
 end
 
 function eventFrame:SPELL_DATA_LOAD_RESULT(spellID, success)

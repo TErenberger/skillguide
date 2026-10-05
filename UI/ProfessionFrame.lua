@@ -11,6 +11,7 @@ local scrollChild
 local scrollFrame
 local rowPool = {}
 local pendingSpellIDs = {}
+local attachedHost = nil
 
 local COLOR_NAME = { 1.00, 0.82, 0.00 }
 local COLOR_SUB = { 0.90, 0.85, 0.70 }
@@ -55,17 +56,48 @@ local function GetSpellDisplay(spellID, fallbackName)
     return name, iconID
 end
 
+local function GetPortraitTexture(frame)
+    if not frame then
+        return nil
+    end
+    local container = frame.PortraitContainer
+    if container then
+        return container.portrait or container.Portrait or container.Icon
+    end
+    return frame.portrait or frame.Portrait
+end
+
 local function UpdateProfessionPortrait(key)
     if not profFrame then
         return
     end
-    local portrait = profFrame.PortraitContainer and profFrame.PortraitContainer.portrait
-        or profFrame.portrait
+    -- Never paint the portrait while docked; attach layout hides that chrome.
+    if profFrame.sgfAttached then
+        return
+    end
+    if ButtonFrameTemplate_ShowPortrait then
+        pcall(ButtonFrameTemplate_ShowPortrait, profFrame)
+    end
+    local container = profFrame.PortraitContainer
+    if container then
+        container:Show()
+        if container.CircleMask then
+            container.CircleMask:Show()
+        end
+    end
+    if profFrame.PortraitFrame then
+        profFrame.PortraitFrame:Show()
+    end
+    local portrait = GetPortraitTexture(profFrame)
     if not portrait then
         return
     end
     local iconSpell = ns.GetProfessionIconSpell(key)
     local _, iconID = GetSpellDisplay(iconSpell, nil)
+    portrait:Show()
+    if SetPortraitToTexture then
+        pcall(SetPortraitToTexture, portrait, iconID)
+    end
     portrait:SetTexture(iconID)
     portrait:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 end
@@ -476,6 +508,10 @@ local function SetSelectedProfession(key)
     ns.RefreshProfessionList()
 end
 
+local DROPDOWN_WIDTH_FREE = 150
+-- UIDropDownMenuTemplate left/right caps sit outside SetWidth's middle segment.
+local DROPDOWN_TEMPLATE_PAD = 28
+
 local function InitProfessionDropdown(dropdown)
     UIDropDownMenu_Initialize(dropdown, function()
         for _, key in ipairs(ns.PROFESSION_ORDER) do
@@ -488,19 +524,139 @@ local function InitProfessionDropdown(dropdown)
             UIDropDownMenu_AddButton(info)
         end
     end)
-    UIDropDownMenu_SetWidth(dropdown, 150)
-    dropdown.SGFMenuWidth = 150
+    UIDropDownMenu_SetWidth(dropdown, DROPDOWN_WIDTH_FREE)
+    dropdown.SGFMenuWidth = DROPDOWN_WIDTH_FREE
     UIDropDownMenu_JustifyText(dropdown, "LEFT")
+end
+
+--- Re-anchor toolbar/scroll/controls for free-float vs docked (no portrait gutter).
+local function LayoutProfessionToolbar()
+    if not profFrame then
+        return
+    end
+    local toolbar = profFrame.toolbar
+    local dropdown = profFrame.professionDropdown
+    local layout = profFrame.SGFLayout
+    if not toolbar or not dropdown or not layout then
+        return
+    end
+
+    local attached = profFrame.sgfAttached == true
+    local left = attached and (layout.toolbarLeftSkinned or 8) or (layout.toolbarLeftPortrait or 56)
+    local inset = profFrame.Inset or profFrame.inset
+    local widgets = profFrame.SkillGuideForeverWidgets
+    local scroll = (widgets and widgets.scrollFrame) or profFrame.sgfScrollFrame
+
+    toolbar:ClearAllPoints()
+    if layout.hasInset and inset then
+        toolbar:SetPoint("TOPLEFT", inset, "TOPLEFT", left, layout.toolbarTop or -4)
+        toolbar:SetPoint("TOPRIGHT", inset, "TOPRIGHT", layout.toolbarRight or -8, layout.toolbarTop or -4)
+    else
+        toolbar:SetPoint("TOPLEFT", left + 4, -60)
+        toolbar:SetPoint("TOPRIGHT", -12, -60)
+    end
+
+    if scroll then
+        scroll:ClearAllPoints()
+        if layout.hasInset and inset then
+            scroll:SetPoint(
+                "TOPLEFT",
+                toolbar,
+                "BOTTOMLEFT",
+                (layout.listInset or 12) - left,
+                layout.scrollGap or -6
+            )
+            scroll:SetPoint(
+                "BOTTOMRIGHT",
+                inset,
+                "BOTTOMRIGHT",
+                layout.scrollRight or -28,
+                layout.scrollBottom or 12
+            )
+        else
+            scroll:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", -36, -6)
+            scroll:SetPoint("BOTTOMRIGHT", -36, 20)
+        end
+    end
+
+    local width = DROPDOWN_WIDTH_FREE
+    if attached then
+        local tw = toolbar:GetWidth() or 0
+        if tw < 40 then
+            tw = (profFrame:GetWidth() or FRAME_WIDTH) - 20
+        end
+        width = math.max(120, math.floor(tw - DROPDOWN_TEMPLATE_PAD))
+    end
+    dropdown.SGFMenuWidth = width
+    if UIDropDownMenu_SetWidth then
+        UIDropDownMenu_SetWidth(dropdown, width)
+    end
+
+    dropdown:ClearAllPoints()
+    dropdown:SetPoint(
+        "TOPLEFT",
+        toolbar,
+        "TOPLEFT",
+        attached and (layout.dropdownLeftSkinned or -4) or (layout.dropdownLeftPortrait or -16),
+        layout.dropdownTop or -2
+    )
+
+    local pad = attached and 0 or 4
+    local hideRecipes = profFrame.hideRecipesCheck
+    if hideRecipes then
+        hideRecipes:ClearAllPoints()
+        hideRecipes:SetPoint("TOPLEFT", toolbar, "TOPLEFT", pad, -30)
+    end
+
+    local search = profFrame.searchBox
+    if search then
+        search:ClearAllPoints()
+        search:SetPoint("TOPLEFT", toolbar, "TOPLEFT", pad, -56)
+        search:SetPoint("TOPRIGHT", toolbar, "TOPRIGHT", -pad, -56)
+    end
+
+    profFrame.SGFPortraitClearance = not attached
 end
 
 local function SavePosition()
     if not profFrame or not ns.db then
         return
     end
+    if profFrame.sgfAttached then
+        return
+    end
     local point, _, _, x, y = profFrame:GetPoint(1)
     ns.db.professionPoint = point or "CENTER"
     ns.db.professionX = x or 40
     ns.db.professionY = y or 0
+end
+
+local function RestoreFreePosition()
+    if not profFrame then
+        return
+    end
+    local point = (ns.db and ns.db.professionPoint) or "CENTER"
+    local x = (ns.db and ns.db.professionX) or 40
+    local y = (ns.db and ns.db.professionY) or 0
+    profFrame:ClearAllPoints()
+    profFrame:SetParent(UIParent)
+    profFrame:SetPoint(point, UIParent, point, x, y)
+    profFrame:SetMovable(true)
+    profFrame:SetToplevel(true)
+    if ns.ApplyFrameAppearance then
+        ns.ApplyFrameAppearance(profFrame)
+    end
+end
+
+local function EnsureProfessionFrameContent()
+    if not profFrame then
+        ns.CreateProfessionFrame()
+    end
+    if not profFrame.selectedProfession then
+        SetSelectedProfession(ns.GetDefaultProfessionKey())
+    else
+        ns.RefreshProfessionList()
+    end
 end
 
 local function ApplyTitle(frame, text)
@@ -568,6 +724,9 @@ function ns.CreateProfessionFrame()
     profFrame:SetPoint(point, UIParent, point, x, y)
 
     profFrame:SetScript("OnDragStart", function(self)
+        if self.sgfAttached then
+            return
+        end
         if not InCombatLockdown or not InCombatLockdown() then
             self:StartMoving()
         end
@@ -582,6 +741,9 @@ function ns.CreateProfessionFrame()
         titleRegion:EnableMouse(true)
         titleRegion:RegisterForDrag("LeftButton")
         titleRegion:SetScript("OnDragStart", function()
+            if profFrame.sgfAttached then
+                return
+            end
             if profFrame:IsMovable() and (not InCombatLockdown or not InCombatLockdown()) then
                 profFrame:StartMoving()
             end
@@ -624,6 +786,10 @@ function ns.CreateProfessionFrame()
         toolbar:SetPoint("TOPRIGHT", -12, -60)
     end
     profFrame.toolbar = toolbar
+    profFrame.SGFLayoutToolbar = LayoutProfessionToolbar
+    toolbar:SetScript("OnSizeChanged", function()
+        LayoutProfessionToolbar()
+    end)
 
     local dropdown = CreateFrame("Frame", "SkillGuideForeverProfessionDropdown", toolbar, "UIDropDownMenuTemplate")
     -- UIDropDownMenuTemplate has empty left padding; pull slightly left within the cleared margin.
@@ -722,6 +888,7 @@ function ns.CreateProfessionFrame()
     profFrame.searchBox = search
 
     scrollFrame = CreateFrame("ScrollFrame", "SkillGuideForeverProfessionScrollFrame", profFrame, "UIPanelScrollFrameTemplate")
+    profFrame.sgfScrollFrame = scrollFrame
     if inset then
         scrollFrame:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", LIST_INSET - TOOLBAR_LEFT, -6)
         scrollFrame:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -28, LIST_INSET)
@@ -744,6 +911,9 @@ function ns.CreateProfessionFrame()
     profFrame:SetScript("OnShow", function(self)
         if PlaySound and SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_OPEN then
             PlaySound(SOUNDKIT.IG_CHARACTER_INFO_OPEN)
+        end
+        if not self.sgfAttached then
+            UpdateProfessionPortrait(self.selectedProfession or ns.GetDefaultProfessionKey())
         end
         if ns.NotifyFrameShow then
             ns.NotifyFrameShow("profession", self)
@@ -777,18 +947,104 @@ function ns.CreateProfessionFrame()
     return profFrame
 end
 
+function ns.IsProfessionFrameAttached()
+    return profFrame ~= nil and profFrame.sgfAttached == true
+end
+
+function ns.GetProfessionFrame()
+    return profFrame
+end
+
+function ns.ShowProfessionFrame()
+    EnsureProfessionFrameContent()
+    if profFrame.sgfAttached then
+        ns.DetachProfessionFrame(false)
+    else
+        RestoreFreePosition()
+        profFrame:Show()
+    end
+    UpdateProfessionPortrait(profFrame.selectedProfession or ns.GetDefaultProfessionKey())
+end
+
+function ns.HideProfessionFrame()
+    if not profFrame then
+        return
+    end
+    if profFrame.sgfAttached then
+        ns.DetachProfessionFrame(true)
+        return
+    end
+    profFrame:Hide()
+end
+
+--- Dock the profession recipe pane to the right of a host (Professions book).
+function ns.AttachProfessionFrameTo(host)
+    if not host then
+        return false
+    end
+    EnsureProfessionFrameContent()
+    attachedHost = host
+    profFrame.sgfAttached = true
+    profFrame:SetMovable(false)
+    profFrame:SetToplevel(false)
+    profFrame:ClearAllPoints()
+    profFrame:SetParent(host)
+    -- Slightly shorter than the host so the side pane reads as a distinct panel.
+    profFrame:SetPoint("TOPLEFT", host, "TOPRIGHT", -6, -22)
+    profFrame:SetPoint("BOTTOMLEFT", host, "BOTTOMRIGHT", -6, 40)
+    profFrame:SetWidth(FRAME_WIDTH)
+    local hostStrata = host.GetFrameStrata and host:GetFrameStrata()
+    if hostStrata then
+        profFrame:SetFrameStrata(hostStrata)
+    end
+    if host.GetFrameLevel then
+        profFrame:SetFrameLevel(host:GetFrameLevel() + 2)
+    end
+    if ns.ApplyAttachedPaneLayout then
+        ns.ApplyAttachedPaneLayout(profFrame)
+    end
+    profFrame:Show()
+    -- After OnShow/skins so the no-portrait toolbar wins the layout race.
+    LayoutProfessionToolbar()
+    return true
+end
+
+--- Restore free-float parenting/position. hide=false leaves the window open.
+function ns.DetachProfessionFrame(hide)
+    if not profFrame then
+        attachedHost = nil
+        return
+    end
+    if not profFrame.sgfAttached then
+        if hide then
+            profFrame:Hide()
+        end
+        return
+    end
+    profFrame.sgfAttached = false
+    attachedHost = nil
+    if ns.RestoreAttachedPaneLayout then
+        ns.RestoreAttachedPaneLayout(profFrame)
+    end
+    RestoreFreePosition()
+    profFrame:SetWidth(FRAME_WIDTH)
+    profFrame:SetHeight(FRAME_HEIGHT)
+    LayoutProfessionToolbar()
+    UpdateProfessionPortrait(profFrame.selectedProfession or ns.GetDefaultProfessionKey())
+    if hide ~= false then
+        profFrame:Hide()
+    else
+        profFrame:Show()
+    end
+end
+
 function ns.ToggleProfessionFrame()
     if not profFrame then
         ns.CreateProfessionFrame()
     end
     if profFrame:IsShown() then
-        profFrame:Hide()
+        ns.HideProfessionFrame()
     else
-        if not profFrame.selectedProfession then
-            SetSelectedProfession(ns.GetDefaultProfessionKey())
-        else
-            ns.RefreshProfessionList()
-        end
-        profFrame:Show()
+        ns.ShowProfessionFrame()
     end
 end

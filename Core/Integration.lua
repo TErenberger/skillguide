@@ -38,6 +38,12 @@ function ns.EnsureIntegrationDefaults()
     if db.builtInSkin == nil then
         db.builtInSkin = "blizzard"
     end
+    if db.spellbookPane == nil then
+        db.spellbookPane = true
+    end
+    if db.professionsBookPane == nil then
+        db.professionsBookPane = true
+    end
 end
 
 function ns.ShouldFireSkinEvents()
@@ -113,6 +119,11 @@ function ns.SetPortraitClearance(frame, needClearance)
     if not frame then
         return
     end
+    -- Docked side panes hide the portrait; never reserve its gutter (skins may
+    -- call this with true on show — attached layout wins).
+    if frame.sgfAttached then
+        needClearance = false
+    end
     local layout = frame.SGFLayout
     local widgets = frame.SkillGuideForeverWidgets or {}
     local toolbar = widgets.toolbar or frame.toolbar
@@ -155,7 +166,7 @@ function ns.SetPortraitClearance(frame, needClearance)
         end
     end
 
-    -- Profession dropdown is absolutely placed; tighten its pull-left when skinned.
+    -- Profession dropdown is absolutely placed; tighten its pull-left when skinned/attached.
     local dropdown = widgets.dropdown
     if dropdown and layout.dropdownUsesToolbarAnchor then
         dropdown:ClearAllPoints()
@@ -169,6 +180,125 @@ function ns.SetPortraitClearance(frame, needClearance)
     end
 
     frame.SGFPortraitClearance = needClearance and true or false
+
+    if frame.SGFLayoutToolbar then
+        frame.SGFLayoutToolbar()
+    end
+end
+
+local function ForceShow(obj)
+    if obj and obj.Show then
+        obj:Show()
+    end
+end
+
+local function ForceHide(obj)
+    if obj and obj.Hide then
+        obj:Hide()
+    end
+end
+
+--- Compact side-pane chrome when docked to Blizzard spellbook / craft UI:
+--- hide the duplicate portrait circle and use the full top for toolbar controls.
+function ns.ApplyAttachedPaneLayout(frame)
+    if not frame then
+        return
+    end
+    local state = frame.sgfAttachedChrome
+    if not state then
+        state = {}
+        frame.sgfAttachedChrome = state
+    end
+
+    if state.prevClearance == nil then
+        state.prevClearance = frame.SGFPortraitClearance ~= false
+    end
+
+    -- Official ButtonFrameTemplate helper removes the portrait *and* the ring.
+    if ButtonFrameTemplate_HidePortrait then
+        state.usedTemplateHidePortrait = true
+        pcall(ButtonFrameTemplate_HidePortrait, frame)
+    end
+
+    -- Force-hide leftovers the template helper misses (extra ring children/regions).
+    -- Do not snapshot IsShown() after HidePortrait — that records "false" and would
+    -- re-hide the chrome on restore after ButtonFrameTemplate_ShowPortrait.
+    local portrait = frame.PortraitContainer
+    if portrait then
+        ForceHide(portrait)
+        ForceHide(portrait.portrait)
+        ForceHide(portrait.Portrait)
+        ForceHide(portrait.CircleMask)
+        if portrait.GetChildren then
+            local kids = { portrait:GetChildren() }
+            for i = 1, #kids do
+                ForceHide(kids[i])
+            end
+        end
+        if portrait.GetRegions then
+            local regions = { portrait:GetRegions() }
+            for i = 1, #regions do
+                ForceHide(regions[i])
+            end
+        end
+    end
+    ForceHide(frame.portrait)
+    ForceHide(frame.PortraitFrame)
+    local frameName = frame.GetName and frame:GetName()
+    if frameName then
+        ForceHide(_G[frameName .. "PortraitFrame"])
+        ForceHide(_G[frameName .. "Portrait"])
+    end
+
+    if ns.SetPortraitClearance then
+        ns.SetPortraitClearance(frame, false)
+    end
+end
+
+function ns.RestoreAttachedPaneLayout(frame)
+    if not frame then
+        return
+    end
+    local state = frame.sgfAttachedChrome
+    local prevClearance = true
+    if state then
+        prevClearance = state.prevClearance ~= false
+        if state.usedTemplateHidePortrait and ButtonFrameTemplate_ShowPortrait then
+            pcall(ButtonFrameTemplate_ShowPortrait, frame)
+        end
+        -- Always put standalone portrait chrome back; UpdatePortrait paints the icon.
+        local portrait = frame.PortraitContainer
+        if portrait then
+            ForceShow(portrait)
+            ForceShow(portrait.portrait)
+            ForceShow(portrait.Portrait)
+            ForceShow(portrait.CircleMask)
+            if portrait.GetChildren then
+                local kids = { portrait:GetChildren() }
+                for i = 1, #kids do
+                    ForceShow(kids[i])
+                end
+            end
+            if portrait.GetRegions then
+                local regions = { portrait:GetRegions() }
+                for i = 1, #regions do
+                    ForceShow(regions[i])
+                end
+            end
+        end
+        ForceShow(frame.portrait)
+        ForceShow(frame.PortraitFrame)
+        local frameName = frame.GetName and frame:GetName()
+        if frameName then
+            ForceShow(_G[frameName .. "PortraitFrame"])
+            ForceShow(_G[frameName .. "Portrait"])
+        end
+        frame.sgfAttachedChrome = nil
+    end
+
+    if ns.SetPortraitClearance then
+        ns.SetPortraitClearance(frame, prevClearance)
+    end
 end
 
 function ns.NotifyOptionsChanged(key, value)
